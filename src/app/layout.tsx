@@ -18,11 +18,11 @@ const inter = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "İhalePro - Türkiye'nin İhale Platformu",
+    default: "ihalepro | ÜCRETSİZ İhale Takibi ve İhaleler için Rakip Analizi",
     template: "%s | İhalePro",
   },
   description:
-    "Türkiye genelindeki kamu ve özel sektör ihalelerini takip edin. Güncel ihale ilanları, sonuçları ve detaylı ihale bilgileri İhalePro'da.",
+    "İhaleye açılan her kapı burada! Ücretsiz ihale takibi, yapay zeka ile ihale arama, rakip analizi ve kapsamlı ihale databankası.",
   keywords: [
     "ihale",
     "kamu ihale",

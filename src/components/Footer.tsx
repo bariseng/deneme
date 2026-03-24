@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Mail,
@@ -8,24 +10,25 @@ import {
 
 const footerLinks = {
   platform: [
-    { label: "Tüm İhaleler", href: "/ihaleler" },
-    { label: "Yapım İşleri", href: "/ihaleler?kategori=yapim" },
-    { label: "Mal Alımı", href: "/ihaleler?kategori=mal-alimi" },
-    { label: "Hizmet Alımı", href: "/ihaleler?kategori=hizmet" },
-    { label: "Danışmanlık", href: "/ihaleler?kategori=danismanlik" },
+    { label: "İhale Bul", href: "/ihaleler" },
+    { label: "KİK İhale Arama", href: "/ihaleler?kaynak=kik" },
+    { label: "Birim Fiyatlar", href: "/ihaleler?hizmet=birim-fiyatlar" },
+    { label: "Rakip Analizi", href: "/ihaleler?hizmet=rakip-analizi" },
+    { label: "İhale Analiz", href: "/ihaleler?hizmet=ihale-analiz" },
   ],
   company: [
     { label: "Hakkımızda", href: "/hakkimizda" },
+    { label: "Referanslar", href: "/hakkimizda#referanslar" },
     { label: "İletişim", href: "/iletisim" },
     { label: "Gizlilik Politikası", href: "#" },
     { label: "Kullanım Koşulları", href: "#" },
-    { label: "KVKK", href: "#" },
   ],
   support: [
-    { label: "Sıkça Sorulan Sorular", href: "#" },
-    { label: "Yardım Merkezi", href: "#" },
-    { label: "API Dokümantasyonu", href: "#" },
-    { label: "Blog", href: "#" },
+    { label: "Nasıl Arama Yaparım?", href: "#" },
+    { label: "İhale Takip Nedir?", href: "#" },
+    { label: "İhaleye Nasıl Girilir?", href: "#" },
+    { label: "EKAP İhale Sorgulama", href: "#" },
+    { label: "E-İhale İndir", href: "#" },
   ],
 };
 
@@ -57,15 +60,15 @@ export default function Footer() {
             <div className="space-y-2 text-sm text-gray-400">
               <div className="flex items-center gap-2">
                 <Phone size={14} />
-                <span>0850 123 45 67</span>
+                <span>0312 911 35 27</span>
               </div>
               <div className="flex items-center gap-2">
                 <Mail size={14} />
-                <span>info@ihalepro.com</span>
+                <span>iletisim@ihalepro.com</span>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin size={14} />
-                <span>İstanbul, Türkiye</span>
+                <span>ODTÜ Teknokent, Çankaya / Ankara</span>
               </div>
             </div>
           </div>
@@ -128,8 +131,34 @@ export default function Footer() {
           </div>
         </div>
 
+        {/* Newsletter */}
+        <div className="mt-10 pt-8 border-t border-gray-700">
+          <div className="max-w-md">
+            <h3 className="font-semibold text-sm uppercase tracking-wider mb-2">
+              Aylık Bülten - Takipte Kalın
+            </h3>
+            <p className="text-sm text-gray-400 mb-3">
+              Güncel ihale haberleri ve fırsatlar için bültenimize abone olun.
+            </p>
+            <form className="flex gap-2" onSubmit={(e) => e.preventDefault()}>
+              <input
+                type="email"
+                placeholder="E-posta adresiniz"
+                className="flex-1 h-10 px-4 text-sm bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                aria-label="Bülten e-posta adresi"
+              />
+              <button
+                type="submit"
+                className="h-10 px-5 bg-secondary hover:bg-secondary-dark text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Abone Ol
+              </button>
+            </form>
+          </div>
+        </div>
+
         {/* Bottom bar */}
-        <div className="mt-12 pt-8 border-t border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="mt-8 pt-8 border-t border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-sm text-gray-400">
             &copy; 2026 İhalePro. Tüm hakları saklıdır.
           </p>

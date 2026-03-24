@@ -42,12 +42,12 @@ export default function Home() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28 lg:py-36">
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white leading-tight mb-6">
-              Türkiye&apos;nin En Kapsamlı{" "}
-              <span className="text-secondary">İhale Platformu</span>
+              İhaleye Açılan Her Kapı{" "}
+              <span className="text-secondary">Burada!</span>
             </h1>
             <p className="text-lg md:text-xl text-blue-100 mb-10 max-w-2xl mx-auto">
-              Kamu ve özel sektör ihalelerini anlık takip edin. Binlerce ihale
-              fırsatını keşfedin, doğru ihalelere zamanında başvurun.
+              Ücretsiz ihale takibi ve dahası için hemen üye olun. Yapay zeka
+              destekli ihale arama, rakip analizi ve anlık bildirimler.
             </p>
 
             {/* Search bar */}
@@ -214,23 +214,23 @@ export default function Home() {
             {[
               {
                 icon: Zap,
-                title: "Anlık Bildirimler",
-                desc: "Yeni ihalelerden anında haberdar olun. E-posta ve SMS bildirimleri ile hiçbir fırsatı kaçırmayın.",
+                title: "Yapay Zeka ile İhale Arama",
+                desc: "Yapay zeka destekli arama motorumuz ile size en uygun ihaleleri otomatik olarak bulun.",
               },
               {
                 icon: Shield,
-                title: "Güvenilir Veriler",
-                desc: "Resmi kaynaklardan doğrulanmış, güncel ve doğru ihale bilgileri.",
+                title: "Rakip Keşfetme & Analiz",
+                desc: "Rakiplerinizin ihale geçmişlerini, sözleşme bedellerini ve sektörel dağılımlarını analiz edin.",
               },
               {
                 icon: BarChart3,
-                title: "Detaylı Analizler",
-                desc: "İhale piyasası trendlerini takip edin, rakip analizi yapın.",
+                title: "Günlük İhale Raporu",
+                desc: "Her gün size özel hazırlanan ihale raporlarıyla fırsatları kaçırmayın.",
               },
               {
                 icon: CheckCircle2,
-                title: "Kolay Kullanım",
-                desc: "Gelişmiş filtreleme ve arama özellikleri ile ihtiyacınıza uygun ihaleleri hızlıca bulun.",
+                title: "Kapsamlı İhale Databankası",
+                desc: "Milyonlarca ihale sonucu ve sözleşme bilgisini içeren veritabanımızdan yararlanın.",
               },
             ].map((item) => (
               <div
@@ -256,11 +256,11 @@ export default function Home() {
       <section className="py-16 md:py-20 bg-gradient-to-r from-primary to-primary-dark">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
-            Hemen Ücretsiz Kayıt Olun
+            Ücretsiz İhale Takibi ve Dahası İçin Ücretsiz Üye Olun
           </h2>
           <p className="text-blue-100 mb-8 max-w-xl mx-auto">
-            İhalePro&apos;ya ücretsiz kayıt olarak binlerce ihale fırsatını
-            keşfetmeye başlayın. İlk 30 gün premium özellikler ücretsiz!
+            İhalePro&apos;ya ücretsiz üye olarak günlük ihale raporları, yapay
+            zeka destekli arama ve rakip analizi özelliklerinden yararlanın.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link

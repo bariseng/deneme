@@ -96,14 +96,17 @@ export default function AboutPage() {
                 Misyonumuz
               </h2>
               <p className="text-foreground-light leading-relaxed mb-4">
-                İhalePro olarak misyonumuz, Türkiye genelindeki kamu ve özel
-                sektör ihalelerini tek bir platformda toplamak, firmaların
-                doğru ihalelere en hızlı şekilde ulaşmasını sağlamaktır.
+                Eflatun Yazılım tarafından geliştirilen İhalePro, ODTÜ
+                Teknokent Bilişim ve İnovasyon Merkezi&apos;nde faaliyet
+                göstermektedir. Milyonlarca ihale sonucu ve sözleşme
+                bilgisini içeren veritabanımız, özgün yazılım
+                algoritmalarımızla işlenerek kullanıcılara sunulmaktadır.
               </p>
               <p className="text-foreground-light leading-relaxed mb-6">
-                2020 yılında kurulan İhalePro, bugün 8.200&apos;den fazla
-                kayıtlı firma ve 3.500&apos;den fazla kurumla Türkiye&apos;nin
-                en büyük ihale takip platformu konumundadır.
+                Türkiye genelinde pek çok farklı sektörden firma ve kamu
+                kurumuna hizmet veren İhalePro, yapay zeka destekli ihale
+                arama, rakip analizi ve kapsamlı raporlama özellikleri
+                sunmaktadır.
               </p>
               <ul className="space-y-3">
                 {[

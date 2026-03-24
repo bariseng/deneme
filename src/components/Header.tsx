@@ -15,16 +15,27 @@ import {
 const navItems = [
   { label: "Ana Sayfa", href: "/" },
   {
-    label: "İhaleler",
+    label: "İhale Bul",
     href: "/ihaleler",
     children: [
       { label: "Tüm İhaleler", href: "/ihaleler" },
+      { label: "KİK İhale Arama", href: "/ihaleler?kaynak=kik" },
       { label: "Yapım İşleri", href: "/ihaleler?kategori=yapim" },
       { label: "Mal Alımı", href: "/ihaleler?kategori=mal-alimi" },
       { label: "Hizmet Alımı", href: "/ihaleler?kategori=hizmet" },
       { label: "Danışmanlık", href: "/ihaleler?kategori=danismanlik" },
     ],
   },
+  {
+    label: "Hizmetlerimiz",
+    href: "#",
+    children: [
+      { label: "Rakip Analizi", href: "/ihaleler?hizmet=rakip-analizi" },
+      { label: "İhale Analiz", href: "/ihaleler?hizmet=ihale-analiz" },
+      { label: "Birim Fiyatlar", href: "/ihaleler?hizmet=birim-fiyatlar" },
+    ],
+  },
+  { label: "Referanslar", href: "/hakkimizda#referanslar" },
   { label: "Hakkımızda", href: "/hakkimizda" },
   { label: "İletişim", href: "/iletisim" },
 ];
@@ -40,7 +51,7 @@ export default function Header() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-9">
           <div className="flex items-center gap-4">
             <span className="hidden sm:inline">
-              Türkiye&apos;nin En Kapsamlı İhale Platformu
+              Ücretsiz İhale Takip Portalı | İhaleye Açılan Her Kapı Burada!
             </span>
           </div>
           <div className="flex items-center gap-4">

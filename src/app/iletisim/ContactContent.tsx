@@ -13,22 +13,26 @@ const contactInfo = [
   {
     icon: Phone,
     title: "Telefon",
-    details: ["0850 123 45 67", "0212 987 65 43"],
+    details: ["0312 911 35 27", "0312 287 65 56"],
   },
   {
     icon: Mail,
     title: "E-posta",
-    details: ["info@ihalepro.com", "destek@ihalepro.com"],
+    details: ["iletisim@ihalepro.com"],
   },
   {
     icon: MapPin,
     title: "Adres",
-    details: ["Levent Mah. İhale Sok. No:42", "Beşiktaş / İstanbul"],
+    details: [
+      "Dumlupınar Bulvarı No:280/G-1253",
+      "ODTÜ Teknokent Bilişim ve İnovasyon Merkezi",
+      "Çankaya / Ankara",
+    ],
   },
   {
     icon: Clock,
     title: "Çalışma Saatleri",
-    details: ["Pazartesi - Cuma: 09:00 - 18:00", "Cumartesi: 10:00 - 14:00"],
+    details: ["Pazartesi - Cuma: 08:30 - 18:00"],
   },
 ];
 
@@ -194,7 +198,7 @@ export default function ContactContent() {
                 Harita burada görüntülenecektir
               </p>
               <p className="text-sm text-foreground-light">
-                Levent Mah. İhale Sok. No:42, Beşiktaş / İstanbul
+                ODTÜ Teknokent, Dumlupınar Bulvarı No:280, Çankaya / Ankara
               </p>
             </div>
           </div>
