@@ -1,8 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    // Validate cron secret
+    const authHeader = request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (!cronSecret) {
+      return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+    }
+
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 });
+    }
     const log = await prisma.ekapSyncLog.create({
       data: { status: "running" },
     });

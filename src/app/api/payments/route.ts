@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { paymentService, type PlanId } from "@/lib/integrations/payment";
+import { getCurrentUser } from "@/lib/auth";
 
 /**
  * POST /api/payments
  * Create a payment checkout session
  *
- * Body: { planId, billingPeriod, userId }
+ * Body: { planId, billingPeriod }
  */
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Giriş yapmanız gerekiyor" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
-    const { planId, billingPeriod, userId } = body;
+    const { planId, billingPeriod } = body;
 
     if (!planId || !billingPeriod) {
       return NextResponse.json(
@@ -22,7 +31,7 @@ export async function POST(request: NextRequest) {
     const session = await paymentService.createCheckout(
       planId as PlanId,
       billingPeriod,
-      userId || "demo-user"
+      user.id
     );
 
     return NextResponse.json({ success: true, data: session });
