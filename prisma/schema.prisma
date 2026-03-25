@@ -147,6 +147,7 @@ model User {
   courseProgress     UserCourseProgress[] @relation("CourseStudent")
   certificates       Certificate[]        @relation("CertificateHolder")
   healthQueries      FinancialHealthQuery[] @relation("HealthQueryUser")
+  legalAlerts        UserLegalAlert[]       @relation("LegalAlertUser")
 
   @@index([email])
   @@index([companyId])
@@ -1994,6 +1995,26 @@ enum RiskLevel {
   CRITICAL
 }
 
+enum LegalSource {
+  RESMI_GAZETE
+  KIK
+  MEVZUAT_GOV
+}
+
+enum LegalCategory {
+  KANUN
+  YONETMELIK
+  TEBLIG
+  DUYURU
+}
+
+enum ImpactLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 model UnitPriceIndex {
   id          String   @id @default(cuid())
   sector      String   // "YAPIM", "HIZMET", "MAL_ALIMI"
@@ -2096,4 +2117,54 @@ model CapacityAnalysis {
 
   @@index([companyId])
   @@index([analyzedAt])
+}
+
+// ─── LEGAL RADAR ────────────────────────────────────────────
+
+model LegalUpdate {
+  id          String        @id @default(cuid())
+  title       String
+  source      LegalSource
+  category    LegalCategory
+  summary     String        @db.Text
+  aiSummary   String?       @db.Text
+  impactLevel ImpactLevel   @default(MEDIUM)
+  originalUrl String
+  publishDate DateTime
+  rawContent  String?       @db.Text
+  createdAt   DateTime      @default(now())
+
+  diffs LegalUpdateDiff[] @relation("UpdateDiffs")
+
+  @@index([source])
+  @@index([category])
+  @@index([impactLevel])
+  @@index([publishDate])
+}
+
+model LegalUpdateDiff {
+  id              String @id @default(cuid())
+  updateId        String
+  oldText         String? @db.Text
+  newText         String? @db.Text
+  changedSections Json    // [{ section, type: "added"|"removed"|"modified", content }]
+
+  update LegalUpdate @relation("UpdateDiffs", fields: [updateId], references: [id], onDelete: Cascade)
+
+  @@index([updateId])
+}
+
+model UserLegalAlert {
+  id           String   @id @default(cuid())
+  userId       String
+  categories   String[] // LegalCategory values
+  impactLevels String[] // ImpactLevel values
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation("LegalAlertUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@index([userId])
 }

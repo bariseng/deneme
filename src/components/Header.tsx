@@ -49,6 +49,7 @@ const navItems = [
       { label: "İhale Akademisi", href: "/akademi" },
       { label: "Fiyat Endeksi", href: "/fiyat-endeksi" },
       { label: "Mali Sağlık Skoru", href: "/mali-skor" },
+      { label: "Mevzuat Radarı", href: "/mevzuat" },
       { label: "Raporlama & Analitik", href: "/admin" },
       { label: "Entegrasyonlar", href: "/entegrasyonlar" },
       { label: "API Dokümantasyonu", href: "/api-docs" },
