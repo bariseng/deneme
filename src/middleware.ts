@@ -21,6 +21,7 @@ const protectedPaths = [
   "/mali-skor",
   "/mevzuat",
   "/uluslararasi",
+  "/takvim",
 ];
 
 const authPaths = ["/giris", "/kayit"];
@@ -67,6 +68,7 @@ export const config = {
     "/mali-skor/:path*",
     "/mevzuat/:path*",
     "/uluslararasi/:path*",
+    "/takvim/:path*",
     "/giris",
     "/kayit",
   ],

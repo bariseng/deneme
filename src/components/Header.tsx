@@ -51,6 +51,7 @@ const navItems = [
       { label: "Mali Sağlık Skoru", href: "/mali-skor" },
       { label: "Mevzuat Radarı", href: "/mevzuat" },
       { label: "Uluslararası İhaleler", href: "/uluslararasi" },
+      { label: "Akıllı Takvim", href: "/takvim" },
       { label: "Raporlama & Analitik", href: "/admin" },
       { label: "Entegrasyonlar", href: "/entegrasyonlar" },
       { label: "API Dokümantasyonu", href: "/api-docs" },

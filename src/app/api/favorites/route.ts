@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { onFavoriteAdded } from "@/lib/calendar-engine";
 
 export async function GET() {
   try {
@@ -59,6 +60,25 @@ export async function POST(request: NextRequest) {
     const favorite = await prisma.favorite.create({
       data: { userId: user.id, tenderId },
     });
+
+    // Auto-create calendar events for the tender
+    try {
+      const tender = await prisma.tender.findUnique({
+        where: { id: tenderId },
+        select: { id: true, title: true, deadline: true, openingDate: true, institution: true },
+      });
+      if (tender) {
+        await onFavoriteAdded(user.id, {
+          id: tender.id,
+          title: tender.title,
+          deadline: tender.deadline,
+          openingDate: tender.openingDate,
+          institution: tender.institution,
+        });
+      }
+    } catch {
+      // Calendar event creation is non-critical
+    }
 
     return NextResponse.json({ success: true, data: favorite }, { status: 201 });
   } catch (error) {
