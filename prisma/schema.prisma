@@ -209,6 +209,9 @@ model Company {
   bids        Bid[]
   competitors CompetitorProfile[]
   ipWhitelist IpWhitelist[]
+  jvRequests  JvRequest[]    @relation("JvRequestCompany")
+  jvMatches   JvMatch[]      @relation("JvMatchedCompany")
+  jvAgreements JvAgreementParty[] @relation("JvAgreementCompany")
 
   @@index([taxNumber])
   @@index([city])
@@ -258,6 +261,7 @@ model Tender {
   winProbabilities WinProbability[]
   projects         Project[]
   contracts        Contract[]
+  jvRequests       JvRequest[]
 
   @@index([city])
   @@index([tenderType])
@@ -1622,4 +1626,91 @@ model UserSession {
   @@index([token])
   @@index([isActive])
   @@index([lastSeenAt])
+}
+
+// ─── İŞ ORTAKLIĞI EŞLEŞTİRME (JV MATCHING) ────────────────
+
+enum JvRequestStatus {
+  OPEN
+  MATCHED
+  CLOSED
+}
+
+enum JvMatchStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model JvRequest {
+  id                       String          @id @default(cuid())
+  companyId                String
+  tenderId                 String?
+  title                    String
+  description              String          @db.Text
+  requiredSpecialty         String          // "YAPIM", "HIZMET", etc.
+  requiredExperienceAmount Decimal         @db.Decimal(18, 2)
+  city                     String
+  status                   JvRequestStatus @default(OPEN)
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+
+  company   Company    @relation("JvRequestCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  tender    Tender?    @relation(fields: [tenderId], references: [id], onDelete: SetNull)
+  matches   JvMatch[]
+  agreement JvAgreement?
+
+  @@index([companyId])
+  @@index([tenderId])
+  @@index([status])
+  @@index([city])
+  @@index([requiredSpecialty])
+}
+
+model JvMatch {
+  id                 String        @id @default(cuid())
+  requestId          String
+  matchedCompanyId   String
+  compatibilityScore Float
+  status             JvMatchStatus @default(PENDING)
+  message            String?       @db.Text
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  request        JvRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  matchedCompany Company   @relation("JvMatchedCompany", fields: [matchedCompanyId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, matchedCompanyId])
+  @@index([requestId])
+  @@index([matchedCompanyId])
+  @@index([status])
+}
+
+model JvAgreement {
+  id            String   @id @default(cuid())
+  requestId     String   @unique
+  agreementType String   // "ADI_ORTAKLIK", "KONSORSIYUM"
+  ndaSignedAt   DateTime?
+  templateUrl   String?
+  terms         Json?    // NDA template as JSON
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  request JvRequest          @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  parties JvAgreementParty[]
+}
+
+model JvAgreementParty {
+  id          String @id @default(cuid())
+  agreementId String
+  companyId   String
+  role        String // "PILOT_ORTAK", "OZEL_ORTAK"
+  sharePercent Float  @default(50)
+
+  agreement JvAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  company   Company     @relation("JvAgreementCompany", fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([agreementId, companyId])
+  @@index([agreementId])
+  @@index([companyId])
 }
