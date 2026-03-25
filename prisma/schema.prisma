@@ -144,6 +144,8 @@ model User {
   guaranteeRequests  GuaranteeRequest[] @relation("GuaranteeRequester")
   insuranceRequests  InsuranceRequest[] @relation("InsuranceRequester")
   financeLeads       FinanceLeadLog[]   @relation("LeadUser")
+  courseProgress     UserCourseProgress[] @relation("CourseStudent")
+  certificates       Certificate[]        @relation("CertificateHolder")
 
   @@index([email])
   @@index([companyId])
@@ -1872,4 +1874,105 @@ model FinanceLeadLog {
   @@index([userId])
   @@index([partnerId])
   @@index([offerType])
+}
+
+// ─── İHALE AKADEMİSİ (E-ÖĞRENİM) ──────────────────────────
+
+enum CourseDifficulty {
+  BASLANGIC
+  ORTA
+  ILERI
+  UZMAN
+}
+
+model Course {
+  id              String           @id @default(cuid())
+  title           String
+  slug            String           @unique
+  description     String           @db.Text
+  thumbnailUrl    String?
+  category        String           // "MEVZUAT", "EKAP", "TEKLIF", "SOZLESME", "FINANS"
+  difficulty      CourseDifficulty @default(BASLANGIC)
+  durationMinutes Int              @default(0)
+  isPremium       Boolean          @default(false)
+  price           Decimal?         @db.Decimal(10, 2)
+  order           Int              @default(0)
+  isPublished     Boolean          @default(true)
+  instructorName  String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  lessons  Lesson[]
+  progress UserCourseProgress[]
+  certificates Certificate[]
+
+  @@index([slug])
+  @@index([category])
+  @@index([difficulty])
+  @@index([isPublished])
+}
+
+model Lesson {
+  id              String  @id @default(cuid())
+  courseId         String
+  title           String
+  slug            String
+  content         String  @db.Text
+  videoUrl        String?
+  durationMinutes Int     @default(0)
+  order           Int     @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  quiz   Quiz?
+
+  @@unique([courseId, slug])
+  @@index([courseId])
+  @@index([order])
+}
+
+model Quiz {
+  id        String @id @default(cuid())
+  lessonId  String @unique
+  questions Json   // [{ question, options: string[], correctIndex, explanation }]
+  passingScore Int @default(70)
+  createdAt DateTime @default(now())
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+}
+
+model UserCourseProgress {
+  id               String    @id @default(cuid())
+  userId           String
+  courseId          String
+  completedLessons String[]  // lesson IDs
+  quizScores       Json?     // { lessonId: score }
+  completedAt      DateTime?
+  certificateId    String?
+  startedAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user   User   @relation("CourseStudent", fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model Certificate {
+  id                String   @id @default(cuid())
+  userId            String
+  courseId           String
+  certificateNumber String   @unique // "CERT-2026-XXXXX"
+  issuedAt          DateTime @default(now())
+  verificationUrl   String?
+
+  user   User   @relation("CertificateHolder", fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([certificateNumber])
 }

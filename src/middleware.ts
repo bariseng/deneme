@@ -16,6 +16,7 @@ const protectedPaths = [
   "/guvenlik",
   "/ortaklik",
   "/finans",
+  "/akademi",
 ];
 
 const authPaths = ["/giris", "/kayit"];
@@ -57,6 +58,7 @@ export const config = {
     "/guvenlik/:path*",
     "/ortaklik/:path*",
     "/finans/:path*",
+    "/akademi/:path*",
     "/giris",
     "/kayit",
   ],
