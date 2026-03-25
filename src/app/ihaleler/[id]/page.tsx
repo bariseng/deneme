@@ -13,6 +13,7 @@ import {
   Hash,
 } from "lucide-react";
 import ActionSidebar from "./ActionSidebar";
+import PredictedBidders from "./PredictedBidders";
 import { tenders } from "@/lib/data";
 import { notFound } from "next/navigation";
 
@@ -225,6 +226,13 @@ export default async function TenderDetailPage({ params }: PageProps) {
                 ))}
               </div>
             </section>
+
+            {/* Predicted bidders */}
+            <PredictedBidders
+              category={tender.category}
+              city={tender.city}
+              budgetValue={tender.estimatedCostValue}
+            />
           </div>
 
           {/* Sidebar */}

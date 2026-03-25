@@ -30,7 +30,7 @@ const navItems = [
     label: "Hizmetlerimiz",
     href: "#",
     children: [
-      { label: "Rakip Analizi", href: "/ihaleler?hizmet=rakip-analizi" },
+      { label: "Rakip Analizi", href: "/firmalar" },
       { label: "İhale Analiz", href: "/ihaleler?hizmet=ihale-analiz" },
       { label: "Birim Fiyatlar", href: "/ihaleler?hizmet=birim-fiyatlar" },
     ],
