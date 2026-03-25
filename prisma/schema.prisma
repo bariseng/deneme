@@ -2015,6 +2015,13 @@ enum ImpactLevel {
   CRITICAL
 }
 
+enum IntTenderStatus {
+  OPEN
+  CLOSING_SOON
+  CLOSED
+  AWARDED
+}
+
 model UnitPriceIndex {
   id          String   @id @default(cuid())
   sector      String   // "YAPIM", "HIZMET", "MAL_ALIMI"
@@ -2167,4 +2174,65 @@ model UserLegalAlert {
 
   @@unique([userId])
   @@index([userId])
+}
+
+// ─── INTERNATIONAL TENDER PORTAL ────────────────────────────
+
+model InternationalTender {
+  id                  String          @id @default(cuid())
+  title               String
+  titleTr             String?
+  country             String
+  city                String?
+  sector              String
+  estimatedBudget     Decimal?        @db.Decimal(18, 2)
+  currency            String          @default("USD")
+  description         String          @db.Text
+  descriptionTr       String?         @db.Text
+  applicationDeadline DateTime
+  sourceUrl           String
+  sourcePlatform      String
+  status              IntTenderStatus @default(OPEN)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([country])
+  @@index([sector])
+  @@index([status])
+  @@index([applicationDeadline])
+}
+
+model CountryProfile {
+  id                 String   @id @default(cuid())
+  countryCode        String   @unique
+  name               String
+  nameTr             String
+  riskScore          Int      @default(50) // 0-100 (100 = safest)
+  paymentReliability String?
+  legalFramework     String?  @db.Text
+  visaRequirements   String?  @db.Text
+  activeProjectCount Int      @default(0)
+  flagUrl            String?
+  currency           String?
+  timezone           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  riskIndicators CountryRiskIndicator[] @relation("CountryRisks")
+
+  @@index([countryCode])
+  @@index([riskScore])
+}
+
+model CountryRiskIndicator {
+  id          String   @id @default(cuid())
+  countryId   String
+  indicator   String   // political_stability, payment_risk, currency_risk, legal_risk, security_risk
+  value       Int      @default(50) // 0-100
+  lastUpdated DateTime @default(now())
+
+  country CountryProfile @relation("CountryRisks", fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([countryId, indicator])
+  @@index([countryId])
 }
