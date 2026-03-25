@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { useAICredit } from "@/lib/quota";
 import { parseNaturalLanguage } from "@/lib/agent/nlp-parser";
-import type { Prisma } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma";
 
 export async function POST(request: NextRequest) {
   try {

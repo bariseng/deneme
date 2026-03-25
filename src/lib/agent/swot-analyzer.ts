@@ -3,7 +3,7 @@
  * "Bu ihaleye girmeliyim mi?" → SWOT formatında detaylı analiz
  */
 
-import type { Tender, FirmProfile } from "@/generated/prisma/client";
+import type { Tender, FirmProfile } from "@/generated/prisma";
 
 export interface SWOTAnalysis {
   strengths: string[];

@@ -4,7 +4,7 @@ import type {
   PaymentStatus,
   GuaranteeType,
   GuaranteeStatus,
-} from "@/generated/prisma/client";
+} from "@/generated/prisma";
 
 // ─── CONTRACT CRUD ───────────────────────────────────────
 
