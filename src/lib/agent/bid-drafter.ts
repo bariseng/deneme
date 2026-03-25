@@ -2,7 +2,7 @@
  * Otonom Teklif Taslağı — Geçmiş kazanan fiyatları analiz edip optimal teklif aralığı öner
  */
 
-import type { Tender } from "@/generated/prisma";
+import type { Tender } from "@/generated/prisma/client";
 
 export interface BidDraft {
   suggestedMin: number;

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { useAICredit } from "@/lib/quota";
 import { parseNaturalLanguage } from "@/lib/agent/nlp-parser";
-import type { Prisma } from "@/generated/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 
 const responses: Record<string, string> = {
   merhaba: "Merhaba! Ben İhalePro **Agentic AI** Asistanı. Size ihale arama, SWOT analizi, teklif taslağı, firma-ihale eşleştirme ve haftalık brifing konularında yardımcı olabilirim.\n\nDoğal dilde sorabilirsiniz: \"İstanbul'da 5 milyon üstü yapım ihalesi bul\"",

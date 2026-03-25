@@ -3,7 +3,7 @@
  * Embedding benzerlikleri + kural tabanlı skor hesaplama
  */
 
-import type { Tender, FirmProfile } from "@/generated/prisma";
+import type { Tender, FirmProfile } from "@/generated/prisma/client";
 
 export interface MatchResult {
   tenderId: string;
