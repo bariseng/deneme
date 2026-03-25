@@ -124,6 +124,9 @@ model User {
   ownedProjects      Project[]         @relation("ProjectOwner")
   assignedTasks      ProjectTask[]     @relation("TaskAssignee")
   projectComments    ProjectComment[]
+  documentVersions   DocumentVersion[]
+  signatureRequests  SignatureRequest[] @relation("SignatureSigner")
+  approvalSteps      ApprovalWorkflow[] @relation("ApprovalApprover")
 
   @@index([email])
   @@index([companyId])
@@ -260,7 +263,9 @@ model TenderDocument {
   mimeType   String?
   uploadedAt DateTime @default(now())
 
-  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  tender     Tender             @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  versions   DocumentVersion[]
+  shareLinks ShareLink[]
 
   @@index([tenderId])
 }
@@ -878,6 +883,7 @@ model Project {
   owner     User             @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   tasks     ProjectTask[]
   comments  ProjectComment[]
+  approvals ApprovalWorkflow[]
 
   @@unique([tenderId, ownerId])
   @@index([ownerId])
@@ -936,4 +942,100 @@ model ProjectAttachment {
   task ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
+}
+
+// ─── E-SIGNATURE & DOCUMENT MANAGEMENT (EK 5) ──────────
+
+enum SignatureStatus {
+  BEKLIYOR
+  IMZALANDI
+  REDDEDILDI
+  IPTAL
+}
+
+enum ApprovalStatus {
+  BEKLIYOR
+  ONAYLANDI
+  REDDEDILDI
+  ATLANDI
+}
+
+model DocumentVersion {
+  id            String   @id @default(cuid())
+  documentId    String   // TenderDocument id
+  version       Int
+  fileUrl       String
+  fileName      String
+  fileSize      Int?
+  mimeType      String?
+  changeSummary String?  @db.Text
+  ocrText       String?  @db.Text
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  document  TenderDocument     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  signatures SignatureRequest[]
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@index([createdById])
+  @@index([createdAt])
+}
+
+model SignatureRequest {
+  id            String          @id @default(cuid())
+  versionId     String
+  signerId      String
+  status        SignatureStatus @default(BEKLIYOR)
+  method        String?         // "e_devlet", "turkcell_e_imza", "mobil_imza"
+  certificateId String?
+  signedAt      DateTime?
+  rejectedAt    DateTime?
+  reason        String?
+  createdAt     DateTime        @default(now())
+
+  version DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  signer  User            @relation("SignatureSigner", fields: [signerId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@index([signerId])
+  @@index([status])
+}
+
+model ApprovalWorkflow {
+  id         String         @id @default(cuid())
+  projectId  String
+  step       Int            // 1 = Dept Manager, 2 = GM, 3 = Send
+  stepTitle  String         // "Departman Müdürü Onayı", "Genel Müdür Onayı", "Gönderim"
+  approverId String
+  status     ApprovalStatus @default(BEKLIYOR)
+  comment    String?        @db.Text
+  decidedAt  DateTime?
+  createdAt  DateTime       @default(now())
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  approver User    @relation("ApprovalApprover", fields: [approverId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, step])
+  @@index([projectId])
+  @@index([approverId])
+  @@index([status])
+}
+
+model ShareLink {
+  id          String    @id @default(cuid())
+  documentId  String
+  token       String    @unique @default(cuid())
+  expiresAt   DateTime
+  maxDownloads Int      @default(1)
+  downloadCount Int     @default(0)
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  document TenderDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([documentId])
+  @@index([expiresAt])
 }
