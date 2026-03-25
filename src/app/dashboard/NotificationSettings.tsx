@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Bell, Mail, Smartphone, Save, CheckCircle2, ExternalLink } from "lucide-react";
 import { useUserStore } from "@/lib/store";
 import { useState } from "react";
+import PushNotificationToggle from "@/components/PushNotificationToggle";
 
 export default function NotificationSettings() {
   const { notificationPrefs, updateNotificationPrefs } = useUserStore();
@@ -25,6 +26,17 @@ export default function NotificationSettings() {
           Hangi durumlarda bildirim almak istediğinizi ayarlayın.
         </p>
       </div>
+
+      {/* Push bildirimler */}
+      <section className="bg-white rounded-xl border border-border p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Smartphone size={18} className="text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">
+            Push Bildirimleri (PWA)
+          </h3>
+        </div>
+        <PushNotificationToggle />
+      </section>
 
       {/* E-posta bildirimleri */}
       <section className="bg-white rounded-xl border border-border p-5">
