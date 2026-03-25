@@ -1039,3 +1039,57 @@ model ShareLink {
   @@index([documentId])
   @@index([expiresAt])
 }
+
+// ─── MARKET INTELLIGENCE (EK 6) ────────────────────────
+
+model MarketReport {
+  id          String   @id @default(cuid())
+  period      String   // "2026-Q1", "2026-03", "2026-W12"
+  periodType  String   // "weekly", "monthly", "quarterly"
+  sector      String?  // null = all sectors
+  city        String?  // null = all cities
+  metrics     Json     // { tenderCount, totalBudget, avgBudget, growthRate, ... }
+  highlights  Json?    // [{ title, value, change }]
+  generatedAt DateTime @default(now())
+
+  @@unique([period, sector, city])
+  @@index([period])
+  @@index([sector])
+  @@index([city])
+  @@index([generatedAt])
+}
+
+model PriceIndex {
+  id       String   @id @default(cuid())
+  sector   String   // "Yapım İşleri", "Bilişim"
+  item     String   // "Beton C30/37", "Betonarme demiri"
+  unit     String   // "m³", "ton", "adet"
+  price    Decimal  @db.Decimal(18, 2)
+  prevPrice Decimal? @db.Decimal(18, 2) // previous month price
+  change   Float?   // percentage change
+  month    String   // "2026-03"
+  source   String?  // "Çevre ve Şehircilik Bakanlığı", "Piyasa Ortalaması"
+  createdAt DateTime @default(now())
+
+  @@unique([sector, item, month])
+  @@index([sector])
+  @@index([item])
+  @@index([month])
+}
+
+model CompetitionDensity {
+  id          String   @id @default(cuid())
+  city        String
+  sector      String
+  avgBidders  Float    // average number of bidders
+  winRate     Float    // average win rate percentage
+  totalTenders Int     @default(0)
+  totalBudget Decimal  @default(0) @db.Decimal(18, 2)
+  period      String   // "2026-Q1"
+  updatedAt   DateTime @default(now())
+
+  @@unique([city, sector, period])
+  @@index([city])
+  @@index([sector])
+  @@index([period])
+}
