@@ -133,6 +133,10 @@ model User {
   forumReplies       ForumReply[]       @relation("ReplyAuthor")
   wikiEdits          WikiArticle[]      @relation("WikiEditor")
   vendorReviews      VendorReview[]     @relation("VendorReviewer")
+  ownedTenants       Tenant[]           @relation("TenantOwner")
+  apiKeys            ApiKey[]           @relation("ApiKeyOwner")
+  partnerReferrals   PartnerReferral[]  @relation("PartnerUser")
+  referredBy         PartnerReferral[]  @relation("ReferredUser")
 
   @@index([email])
   @@index([companyId])
@@ -1370,4 +1374,133 @@ model VendorReview {
   @@index([reviewerId])
   @@index([rating])
   @@index([createdAt])
+}
+
+// ─── WHITE-LABEL & API MARKETPLACE (EK 9) ───────────────
+
+enum TenantPlan {
+  STARTER
+  BUSINESS
+  ENTERPRISE
+}
+
+enum ReferralStatus {
+  BEKLIYOR
+  ONAYLANDI
+  ODENDI
+  IPTAL
+}
+
+model Tenant {
+  id           String     @id @default(cuid())
+  ownerId      String
+  name         String
+  slug         String     @unique  // subdomain: tenant.ihalepro.com
+  customDomain String?    @unique
+  logo         String?
+  favicon      String?
+  primaryColor String     @default("#1a56db")
+  secondaryColor String?
+  plan         TenantPlan @default(STARTER)
+  isActive     Boolean    @default(true)
+  settings     Json?      // { footerText, headerText, contactEmail, ... }
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  owner    User      @relation("TenantOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  apiKeys  ApiKey[]
+  webhooks Webhook[]
+
+  @@index([ownerId])
+  @@index([slug])
+  @@index([customDomain])
+  @@index([isActive])
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  tenantId    String?
+  name        String
+  key         String    @unique  // hashed key
+  prefix      String    // first 8 chars visible: "ihp_xxxx..."
+  permissions String[]  // ["tenders:read", "tenders:search", "bids:write"]
+  rateLimit   Int       @default(1000) // requests per hour
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  user   User    @relation("ApiKeyOwner", fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  usage  ApiUsage[]
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([key])
+  @@index([prefix])
+  @@index([isActive])
+}
+
+model ApiUsage {
+  id           String   @id @default(cuid())
+  apiKeyId     String
+  endpoint     String
+  method       String   // GET, POST, etc.
+  statusCode   Int
+  responseTime Int      // milliseconds
+  requestBody  String?  @db.Text
+  ipAddress    String?
+  userAgent    String?
+  date         DateTime @default(now())
+
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId])
+  @@index([endpoint])
+  @@index([date])
+  @@index([apiKeyId, date])
+  @@index([statusCode])
+}
+
+model Webhook {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  userId    String?
+  url       String
+  events    String[] // ["tender.created", "tender.updated", "result.announced"]
+  secret    String   // HMAC signing secret
+  isActive  Boolean  @default(true)
+  lastSentAt DateTime?
+  failCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([isActive])
+  @@index([events])
+}
+
+model PartnerReferral {
+  id             String         @id @default(cuid())
+  partnerId      String         // the partner who referred
+  referredUserId String?        // the user who signed up
+  referralCode   String         @unique
+  commission     Decimal        @default(0) @db.Decimal(18, 2)
+  commissionRate Decimal        @default(10) @db.Decimal(5, 2) // percentage
+  status         ReferralStatus @default(BEKLIYOR)
+  paidAt         DateTime?
+  notes          String?        @db.Text
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  partner      User  @relation("PartnerUser", fields: [partnerId], references: [id], onDelete: Cascade)
+  referredUser User? @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId])
+  @@index([referredUserId])
+  @@index([referralCode])
+  @@index([status])
 }
