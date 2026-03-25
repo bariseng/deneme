@@ -6,28 +6,28 @@ import {
   Clock,
   ArrowRight,
   Tag,
+  Hash,
 } from "lucide-react";
 import type { Tender } from "@/lib/data";
 
-function getStatusBadge(status: Tender["status"]) {
-  const styles = {
-    active: "bg-green-100 text-green-800",
-    closed: "bg-red-100 text-red-800",
-    upcoming: "bg-yellow-100 text-yellow-800",
-  };
-  const labels = {
-    active: "Aktif",
-    closed: "Kapandı",
-    upcoming: "Yaklaşan",
-  };
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status]}`}
-    >
-      {labels[status]}
-    </span>
-  );
-}
+const statusStyles: Record<Tender["status"], string> = {
+  active: "bg-green-100 text-green-800",
+  closed: "bg-red-100 text-red-800",
+  upcoming: "bg-yellow-100 text-yellow-800",
+};
+const statusLabels: Record<Tender["status"], string> = {
+  active: "Aktif",
+  closed: "Kapandı",
+  upcoming: "Yaklaşan",
+};
+
+const institutionTypeLabels: Record<Tender["institutionType"], string> = {
+  belediye: "Belediye",
+  bakanlik: "Bakanlık",
+  universite: "Üniversite",
+  kit: "KİT",
+  diger: "Diğer",
+};
 
 function getDaysLeft(deadline: string) {
   const diff = Math.ceil(
@@ -35,7 +35,6 @@ function getDaysLeft(deadline: string) {
   );
   if (diff < 0) return null;
   if (diff === 0) return "Son gün!";
-  if (diff <= 3) return `${diff} gün kaldı`;
   return `${diff} gün kaldı`;
 }
 
@@ -45,12 +44,20 @@ export default function TenderCard({ tender }: { tender: Tender }) {
   return (
     <article className="group bg-white border border-border rounded-xl hover:shadow-lg hover:border-primary/30 transition-all duration-200">
       <div className="p-5">
+        {/* Badges row */}
         <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            {getStatusBadge(tender.status)}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyles[tender.status]}`}
+            >
+              {statusLabels[tender.status]}
+            </span>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
               <Tag size={10} className="mr-1" />
               {tender.category}
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+              {institutionTypeLabels[tender.institutionType]}
             </span>
           </div>
           {daysLeft && tender.status === "active" && (
@@ -61,12 +68,14 @@ export default function TenderCard({ tender }: { tender: Tender }) {
           )}
         </div>
 
+        {/* Title */}
         <Link href={`/ihaleler/${tender.id}`}>
           <h3 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors mb-2 line-clamp-2">
             {tender.title}
           </h3>
         </Link>
 
+        {/* Details */}
         <div className="space-y-1.5 mb-4">
           <div className="flex items-center gap-2 text-sm text-foreground-light">
             <Building2 size={14} className="shrink-0" />
@@ -85,8 +94,13 @@ export default function TenderCard({ tender }: { tender: Tender }) {
               </span>
             </div>
           </div>
+          <div className="flex items-center gap-1 text-xs text-foreground-light">
+            <Hash size={12} />
+            <span>EKAP: {tender.ekapNo}</span>
+          </div>
         </div>
 
+        {/* Cost + link */}
         <div className="flex items-center justify-between pt-3 border-t border-border">
           <div>
             <p className="text-xs text-foreground-light">Tahmini Bedel</p>

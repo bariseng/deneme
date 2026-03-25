@@ -13,6 +13,7 @@ import {
   Tag,
   Banknote,
   CheckCircle2,
+  Hash,
 } from "lucide-react";
 import { tenders } from "@/lib/data";
 import { notFound } from "next/navigation";
@@ -87,6 +88,10 @@ export default async function TenderDetailPage({ params }: PageProps) {
               {tender.category}
             </span>
             <span className="text-xs text-blue-200">{tender.type}</span>
+            <span className="inline-flex items-center gap-1 text-xs text-blue-200">
+              <Hash size={12} />
+              EKAP: {tender.ekapNo}
+            </span>
           </div>
           <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-white leading-tight">
             {tender.title}
