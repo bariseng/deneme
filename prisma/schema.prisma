@@ -129,6 +129,10 @@ model User {
   approvalSteps      ApprovalWorkflow[] @relation("ApprovalApprover")
   contracts          Contract[]         @relation("ContractOwner")
   supplierRatings    SupplierRating[]   @relation("SupplierRater")
+  forumThreads       ForumThread[]      @relation("ThreadAuthor")
+  forumReplies       ForumReply[]       @relation("ReplyAuthor")
+  wikiEdits          WikiArticle[]      @relation("WikiEditor")
+  vendorReviews      VendorReview[]     @relation("VendorReviewer")
 
   @@index([email])
   @@index([companyId])
@@ -1258,4 +1262,112 @@ model Guarantee {
   @@index([type])
   @@index([status])
   @@index([expiryDate])
+}
+
+// ─── COMMUNITY & KNOWLEDGE PLATFORM (EK 8) ─────────────
+
+model ForumCategory {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  slug        String   @unique
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  threads ForumThread[]
+
+  @@index([slug])
+  @@index([sortOrder])
+}
+
+model ForumThread {
+  id          String   @id @default(cuid())
+  categoryId  String
+  authorId    String
+  title       String
+  content     String   @db.Text
+  isPinned    Boolean  @default(false)
+  isLocked    Boolean  @default(false)
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category ForumCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  author   User          @relation("ThreadAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  replies  ForumReply[]
+
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([isPinned])
+  @@index([createdAt])
+  @@index([viewCount])
+}
+
+model ForumReply {
+  id        String   @id @default(cuid())
+  threadId  String
+  authorId  String
+  content   String   @db.Text
+  upvotes   Int      @default(0)
+  isAnswer  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  thread ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author User        @relation("ReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@index([authorId])
+  @@index([upvotes])
+  @@index([createdAt])
+}
+
+model WikiArticle {
+  id           String   @id @default(cuid())
+  title        String
+  slug         String   @unique
+  content      String   @db.Text
+  summary      String?  @db.Text
+  category     String?  // "genel", "mevzuat", "hesaplama", "süreç"
+  tags         String[] // ["teminat", "zeyilname", "iş deneyim"]
+  version      Int      @default(1)
+  lastEditedBy String
+  viewCount    Int      @default(0)
+  isPublished  Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  editor User @relation("WikiEditor", fields: [lastEditedBy], references: [id], onDelete: Cascade)
+
+  @@index([slug])
+  @@index([category])
+  @@index([lastEditedBy])
+  @@index([viewCount])
+  @@index([createdAt])
+}
+
+model VendorReview {
+  id          String   @id @default(cuid())
+  vendorName  String
+  vendorTaxNo String?
+  reviewerId  String
+  rating      Float    // 1-5
+  workQuality Float?   // 1-5
+  timeliness  Float?   // 1-5
+  communication Float? // 1-5
+  pricePerformance Float? // 1-5
+  comment     String?  @db.Text
+  projectType String?  // "Yapım", "Hizmet", "Mal Alımı"
+  isAnonymous Boolean  @default(true)
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reviewer User @relation("VendorReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([vendorName])
+  @@index([vendorTaxNo])
+  @@index([reviewerId])
+  @@index([rating])
+  @@index([createdAt])
 }
