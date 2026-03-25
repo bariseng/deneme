@@ -8,11 +8,17 @@ import {
   Share2,
   Bell,
   BellOff,
+  FileText,
 } from "lucide-react";
 import { useUserStore } from "@/lib/store";
+import { useBidStore } from "@/lib/bid-store";
+import { useRouter } from "next/navigation";
 
 interface Props {
   tenderId: string;
+  tenderTitle: string;
+  institution: string;
+  ekapNo: string;
   estimatedCost: string;
   daysLeft: number;
   status: "active" | "closed" | "upcoming";
@@ -20,19 +26,34 @@ interface Props {
 
 export default function ActionSidebar({
   tenderId,
+  tenderTitle,
+  institution,
+  ekapNo,
   estimatedCost,
   daysLeft,
   status,
 }: Props) {
+  const router = useRouter();
   const {
     followedTenderIds,
     toggleFollow,
     applications,
     addApplication,
   } = useUserStore();
+  const { bids, createBid } = useBidStore();
 
   const isFollowed = followedTenderIds.includes(tenderId);
   const hasApplied = applications.some((a) => a.tenderId === tenderId);
+  const existingBid = bids.find((b) => b.tenderId === tenderId);
+
+  const handlePrepareBid = () => {
+    if (existingBid) {
+      router.push(`/teklifler/${existingBid.id}`);
+    } else {
+      const bidId = createBid({ tenderId, tenderTitle, institution, ekapNo });
+      router.push(`/teklifler/${bidId}`);
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl border border-border p-6 sticky top-28">
@@ -91,6 +112,14 @@ export default function ActionSidebar({
         <button className="w-full h-11 border border-border hover:border-primary text-foreground hover:text-primary font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
           <Share2 size={16} />
           Paylaş
+        </button>
+
+        <button
+          onClick={handlePrepareBid}
+          className="w-full h-11 bg-secondary hover:bg-secondary-dark text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+        >
+          <FileText size={16} />
+          {existingBid ? "Teklifi Düzenle" : "Teklif Hazırla"}
         </button>
       </div>
 

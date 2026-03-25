@@ -281,6 +281,9 @@ export default async function TenderDetailPage({ params }: PageProps) {
           <div className="space-y-6">
             <ActionSidebar
               tenderId={tender.id}
+              tenderTitle={tender.title}
+              institution={tender.institution}
+              ekapNo={tender.ekapNo}
               estimatedCost={tender.estimatedCost}
               daysLeft={daysLeft}
               status={tender.status}
