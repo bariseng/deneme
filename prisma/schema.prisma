@@ -146,6 +146,7 @@ model User {
   financeLeads       FinanceLeadLog[]   @relation("LeadUser")
   courseProgress     UserCourseProgress[] @relation("CourseStudent")
   certificates       Certificate[]        @relation("CertificateHolder")
+  healthQueries      FinancialHealthQuery[] @relation("HealthQueryUser")
 
   @@index([email])
   @@index([companyId])
@@ -217,6 +218,8 @@ model Company {
   jvRequests  JvRequest[]    @relation("JvRequestCompany")
   jvMatches   JvMatch[]      @relation("JvMatchedCompany")
   jvAgreements JvAgreementParty[] @relation("JvAgreementCompany")
+  healthScores     FinancialHealthScore[] @relation("HealthScoreCompany")
+  capacityAnalyses CapacityAnalysis[]     @relation("CapacityCompany")
 
   @@index([taxNumber])
   @@index([city])
@@ -1984,6 +1987,13 @@ enum PricePeriod {
   QUARTERLY
 }
 
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 model UnitPriceIndex {
   id          String   @id @default(cuid())
   sector      String   // "YAPIM", "HIZMET", "MAL_ALIMI"
@@ -2032,4 +2042,58 @@ model RegionalPriceComparison {
 
   @@index([sector])
   @@index([item])
+}
+
+// ─── FINANCIAL HEALTH SCORE ─────────────────────────────────
+
+model FinancialHealthScore {
+  id             String    @id @default(cuid())
+  companyId      String?
+  competitorId   String?
+  targetName     String
+  targetTaxNumber String?
+  overallScore   Int       // 0-100
+  subscores      Json      // { tenderHistory, paymentHistory, debtRatio, capacityScore, sectorExperience }
+  riskLevel      RiskLevel
+  sectorBenchmark Int?     // sector average score
+  calculatedAt   DateTime  @default(now())
+  validUntil     DateTime
+
+  company    Company? @relation("HealthScoreCompany", fields: [companyId], references: [id])
+  queries    FinancialHealthQuery[] @relation("HealthScoreQueries")
+
+  @@index([companyId])
+  @@index([competitorId])
+  @@index([targetTaxNumber])
+  @@index([validUntil])
+}
+
+model FinancialHealthQuery {
+  id                String   @id @default(cuid())
+  userId            String
+  targetCompanyName String
+  targetTaxNumber   String?
+  resultScoreId     String?
+  queriedAt         DateTime @default(now())
+
+  user        User                  @relation("HealthQueryUser", fields: [userId], references: [id])
+  resultScore FinancialHealthScore? @relation("HealthScoreQueries", fields: [resultScoreId], references: [id])
+
+  @@index([userId])
+  @@index([targetTaxNumber])
+}
+
+model CapacityAnalysis {
+  id                 String   @id @default(cuid())
+  companyId          String
+  activeTenders      Int      @default(0)
+  totalCommitment    Decimal  @default(0) @db.Decimal(18, 2)
+  estimatedCapacity  Decimal  @default(0) @db.Decimal(18, 2)
+  utilizationPercent Float    @default(0)
+  analyzedAt         DateTime @default(now())
+
+  company Company @relation("CapacityCompany", fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([analyzedAt])
 }

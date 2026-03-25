@@ -18,6 +18,7 @@ const protectedPaths = [
   "/finans",
   "/akademi",
   "/fiyat-endeksi",
+  "/mali-skor",
 ];
 
 const authPaths = ["/giris", "/kayit"];
@@ -61,6 +62,7 @@ export const config = {
     "/finans/:path*",
     "/akademi/:path*",
     "/fiyat-endeksi/:path*",
+    "/mali-skor/:path*",
     "/giris",
     "/kayit",
   ],
