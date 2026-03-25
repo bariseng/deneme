@@ -2324,3 +2324,38 @@ model SmartReminder {
   @@index([scheduledAt])
   @@index([sentAt])
 }
+
+// ─── EXTERNAL DATA PROVIDER CACHE & SYNC ────────────────────
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model CachedData {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  provider  String
+  ttl       Int
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([provider, key])
+  @@index([expiresAt])
+}
+
+model DataSyncLog {
+  id           String      @id @default(cuid())
+  provider     String
+  operation    String
+  status       SyncStatus
+  recordCount  Int         @default(0)
+  errorMessage String?
+  startedAt    DateTime
+  completedAt  DateTime?
+
+  @@index([provider, status])
+}
