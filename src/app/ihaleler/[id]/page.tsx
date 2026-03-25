@@ -8,13 +8,11 @@ import {
   FileText,
   Download,
   ArrowLeft,
-  Share2,
-  Bell,
   Tag,
   Banknote,
-  CheckCircle2,
   Hash,
 } from "lucide-react";
+import ActionSidebar from "./ActionSidebar";
 import { tenders } from "@/lib/data";
 import { notFound } from "next/navigation";
 
@@ -231,54 +229,12 @@ export default async function TenderDetailPage({ params }: PageProps) {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Action card */}
-            <div className="bg-white rounded-xl border border-border p-6 sticky top-28">
-              {tender.status === "active" && daysLeft > 0 && (
-                <div className="bg-secondary/10 text-secondary border border-secondary/20 rounded-lg p-3 text-center mb-4">
-                  <p className="text-sm font-semibold">
-                    Son başvuruya {daysLeft} gün kaldı
-                  </p>
-                </div>
-              )}
-
-              <div className="text-center mb-6">
-                <p className="text-xs text-foreground-light mb-1">
-                  Tahmini Bedel
-                </p>
-                <p className="text-2xl font-extrabold text-primary">
-                  {tender.estimatedCost}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <button className="w-full h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-                  <CheckCircle2 size={18} />
-                  İhaleye Başvur
-                </button>
-                <button className="w-full h-11 border border-border hover:border-primary text-foreground hover:text-primary font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
-                  <Bell size={16} />
-                  Takibe Al
-                </button>
-                <button className="w-full h-11 border border-border hover:border-primary text-foreground hover:text-primary font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
-                  <Share2 size={16} />
-                  Paylaş
-                </button>
-              </div>
-
-              <div className="mt-6 pt-6 border-t border-border">
-                <p className="text-xs text-foreground-light text-center">
-                  Bu ihaleye başvurmak için{" "}
-                  <Link href="/giris" className="text-primary hover:underline">
-                    giriş yapın
-                  </Link>{" "}
-                  veya{" "}
-                  <Link href="/kayit" className="text-primary hover:underline">
-                    kayıt olun
-                  </Link>
-                  .
-                </p>
-              </div>
-            </div>
+            <ActionSidebar
+              tenderId={tender.id}
+              estimatedCost={tender.estimatedCost}
+              daysLeft={daysLeft}
+              status={tender.status}
+            />
           </div>
         </div>
       </div>

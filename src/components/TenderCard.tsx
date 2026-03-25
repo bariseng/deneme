@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Calendar,
@@ -7,8 +9,10 @@ import {
   ArrowRight,
   Tag,
   Hash,
+  Heart,
 } from "lucide-react";
 import type { Tender } from "@/lib/data";
+import { useUserStore } from "@/lib/store";
 
 const statusStyles: Record<Tender["status"], string> = {
   active: "bg-green-100 text-green-800",
@@ -40,12 +44,14 @@ function getDaysLeft(deadline: string) {
 
 export default function TenderCard({ tender }: { tender: Tender }) {
   const daysLeft = getDaysLeft(tender.deadline);
+  const { followedTenderIds, toggleFollow } = useUserStore();
+  const isFollowed = followedTenderIds.includes(tender.id);
 
   return (
     <article className="group bg-white border border-border rounded-xl hover:shadow-lg hover:border-primary/30 transition-all duration-200">
       <div className="p-5">
         {/* Badges row */}
-        <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyles[tender.status]}`}
@@ -60,13 +66,35 @@ export default function TenderCard({ tender }: { tender: Tender }) {
               {institutionTypeLabels[tender.institutionType]}
             </span>
           </div>
-          {daysLeft && tender.status === "active" && (
-            <span className="text-xs font-medium text-secondary flex items-center gap-1 shrink-0">
-              <Clock size={12} />
-              {daysLeft}
-            </span>
-          )}
+
+          {/* Follow button */}
+          <button
+            onClick={() => toggleFollow(tender.id)}
+            className={`shrink-0 p-1.5 rounded-lg transition-colors ${
+              isFollowed
+                ? "text-pink-500 bg-pink-50 hover:bg-pink-100"
+                : "text-foreground-light hover:text-pink-500 hover:bg-pink-50"
+            }`}
+            aria-label={
+              isFollowed
+                ? `${tender.title} takipten çıkar`
+                : `${tender.title} takibe al`
+            }
+          >
+            <Heart
+              size={16}
+              fill={isFollowed ? "currentColor" : "none"}
+            />
+          </button>
         </div>
+
+        {/* Days left */}
+        {daysLeft && tender.status === "active" && (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-secondary mb-2">
+            <Clock size={12} />
+            {daysLeft}
+          </span>
+        )}
 
         {/* Title */}
         <Link href={`/ihaleler/${tender.id}`}>

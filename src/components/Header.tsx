@@ -56,6 +56,14 @@ export default function Header() {
           </div>
           <div className="flex items-center gap-4">
             <Link
+              href="/dashboard"
+              className="flex items-center gap-1 hover:text-primary-light transition-colors"
+              aria-label="Kontrol paneli"
+            >
+              <User size={14} />
+              <span>Panelim</span>
+            </Link>
+            <Link
               href="/giris"
               className="flex items-center gap-1 hover:text-primary-light transition-colors"
               aria-label="Giriş yap"
