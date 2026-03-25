@@ -34,8 +34,8 @@ const navItems = [
       { label: "Teklif Hazırlama", href: "/teklifler" },
       { label: "AI Özellikleri", href: "/ai" },
       { label: "Raporlama & Analitik", href: "/admin" },
-      { label: "İhale Analiz", href: "/ihaleler?hizmet=ihale-analiz" },
-      { label: "Birim Fiyatlar", href: "/ihaleler?hizmet=birim-fiyatlar" },
+      { label: "Entegrasyonlar", href: "/entegrasyonlar" },
+      { label: "API Dokümantasyonu", href: "/api-docs" },
     ],
   },
   { label: "Referanslar", href: "/hakkimizda#referanslar" },
@@ -58,6 +58,12 @@ export default function Header() {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            <Link
+              href="/premium"
+              className="hidden sm:flex items-center gap-1 bg-secondary hover:bg-secondary-dark px-2.5 py-0.5 rounded text-xs font-semibold transition-colors"
+            >
+              Premium
+            </Link>
             <Link
               href="/dashboard"
               className="flex items-center gap-1 hover:text-primary-light transition-colors"
