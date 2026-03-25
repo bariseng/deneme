@@ -137,6 +137,10 @@ model User {
   apiKeys            ApiKey[]           @relation("ApiKeyOwner")
   partnerReferrals   PartnerReferral[]  @relation("PartnerUser")
   referredBy         PartnerReferral[]  @relation("ReferredUser")
+  securityAuditLogs  SecurityAuditLog[] @relation("AuditUser")
+  dataDeletionReqs   DataDeletionRequest[]
+  twoFactorAuth      TwoFactorAuth?
+  sessions2          UserSession[]      @relation("SessionUser")
 
   @@index([email])
   @@index([companyId])
@@ -204,6 +208,7 @@ model Company {
   users       User[]
   bids        Bid[]
   competitors CompetitorProfile[]
+  ipWhitelist IpWhitelist[]
 
   @@index([taxNumber])
   @@index([city])
@@ -1503,4 +1508,118 @@ model PartnerReferral {
   @@index([referredUserId])
   @@index([referralCode])
   @@index([status])
+}
+
+// ─── SECURITY, AUDIT & COMPLIANCE (EK 10) ───────────────
+
+enum DeletionStatus {
+  TALEP_EDILDI
+  ISLENIYOR
+  TAMAMLANDI
+  REDDEDILDI
+}
+
+model SecurityAuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String   // "user.login", "tender.create", "bid.update", "settings.change"
+  entityType String?  // "User", "Tender", "Bid", "Contract"
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  userAgent  String?
+  severity   String   @default("info") // "info", "warning", "critical"
+  metadata   Json?    // extra context
+  createdAt  DateTime @default(now())
+
+  user User? @relation("AuditUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([severity])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+model DataDeletionRequest {
+  id          String         @id @default(cuid())
+  userId      String
+  status      DeletionStatus @default(TALEP_EDILDI)
+  reason      String?        @db.Text
+  dataTypes   String[]       // ["profil", "teklifler", "mesajlar", "arama_gecmisi"]
+  requestedAt DateTime       @default(now())
+  processedAt DateTime?
+  completedAt DateTime?
+  notes       String?        @db.Text
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+model TwoFactorAuth {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  secret      String   // TOTP secret (encrypted)
+  isEnabled   Boolean  @default(false)
+  backupCodes String[] // hashed backup codes
+  verifiedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model IpWhitelist {
+  id          String   @id @default(cuid())
+  companyId   String
+  ipRange     String   // "192.168.1.0/24" or single IP
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([isActive])
+}
+
+model RolePermission {
+  id        String  @id @default(cuid())
+  role      String  // "ADMIN", "PREMIUM", "USER", "VIEWER"
+  resource  String  // "tenders", "bids", "contracts", "reports", "settings"
+  action    String  // "read", "create", "update", "delete", "approve"
+  isAllowed Boolean @default(true)
+
+  @@unique([role, resource, action])
+  @@index([role])
+  @@index([resource])
+}
+
+model UserSession {
+  id         String    @id @default(cuid())
+  userId     String
+  token      String    @unique
+  ipAddress  String?
+  userAgent  String?
+  device     String?   // "Chrome on Windows", "Safari on iPhone"
+  location   String?   // "İstanbul, TR"
+  isActive   Boolean   @default(true)
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  user User @relation("SessionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([isActive])
+  @@index([lastSeenAt])
 }

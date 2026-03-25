@@ -13,6 +13,7 @@ const protectedPaths = [
   "/sozlesmeler",
   "/topluluk",
   "/white-label",
+  "/guvenlik",
 ];
 
 const authPaths = ["/giris", "/kayit"];
@@ -51,6 +52,7 @@ export const config = {
     "/sozlesmeler/:path*",
     "/topluluk/:path*",
     "/white-label/:path*",
+    "/guvenlik/:path*",
     "/giris",
     "/kayit",
   ],
