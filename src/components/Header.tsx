@@ -45,6 +45,7 @@ const navItems = [
       { label: "White-Label & API", href: "/white-label" },
       { label: "Güvenlik", href: "/guvenlik" },
       { label: "İş Ortaklığı", href: "/ortaklik" },
+      { label: "Finans Marketplace", href: "/finans" },
       { label: "Raporlama & Analitik", href: "/admin" },
       { label: "Entegrasyonlar", href: "/entegrasyonlar" },
       { label: "API Dokümantasyonu", href: "/api-docs" },

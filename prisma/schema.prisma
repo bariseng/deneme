@@ -141,6 +141,9 @@ model User {
   dataDeletionReqs   DataDeletionRequest[]
   twoFactorAuth      TwoFactorAuth?
   sessions2          UserSession[]      @relation("SessionUser")
+  guaranteeRequests  GuaranteeRequest[] @relation("GuaranteeRequester")
+  insuranceRequests  InsuranceRequest[] @relation("InsuranceRequester")
+  financeLeads       FinanceLeadLog[]   @relation("LeadUser")
 
   @@index([email])
   @@index([companyId])
@@ -261,7 +264,9 @@ model Tender {
   winProbabilities WinProbability[]
   projects         Project[]
   contracts        Contract[]
-  jvRequests       JvRequest[]
+  jvRequests         JvRequest[]
+  guaranteeRequests  GuaranteeRequest[] @relation("GuaranteeTender")
+  insuranceRequests  InsuranceRequest[] @relation("InsuranceTender")
 
   @@index([city])
   @@index([tenderType])
@@ -1713,4 +1718,158 @@ model JvAgreementParty {
   @@unique([agreementId, companyId])
   @@index([agreementId])
   @@index([companyId])
+}
+
+// ─── TEMİNAT MEKTUBU & SİGORTA MARKETPLACE ─────────────────
+
+enum GuaranteeRequestType {
+  GECICI
+  KESIN
+  AVANS
+}
+
+enum FinanceRequestStatus {
+  BEKLEMEDE
+  TEKLIFLER_ALINDI
+  ONAYLANDI
+  REDDEDILDI
+  IPTAL
+}
+
+enum InsuranceType {
+  MESLEKI
+  ALL_RISK
+  ISG
+}
+
+enum FinancialPartnerType {
+  BANKA
+  SIGORTA
+}
+
+model GuaranteeRequest {
+  id          String               @id @default(cuid())
+  userId      String
+  tenderId    String?
+  type        GuaranteeRequestType
+  amount      Decimal              @db.Decimal(18, 2)
+  duration    Int                  // gün
+  description String?              @db.Text
+  status      FinanceRequestStatus @default(BEKLEMEDE)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  user   User    @relation("GuaranteeRequester", fields: [userId], references: [id], onDelete: Cascade)
+  tender Tender? @relation("GuaranteeTender", fields: [tenderId], references: [id], onDelete: SetNull)
+  offers GuaranteeOffer[]
+
+  @@index([userId])
+  @@index([tenderId])
+  @@index([status])
+  @@index([type])
+}
+
+model GuaranteeOffer {
+  id             String   @id @default(cuid())
+  requestId      String
+  providerId     String?
+  providerName   String
+  interestRate   Float    // yıllık faiz oranı %
+  commission     Decimal  @db.Decimal(18, 2)
+  processingDays Int
+  totalCost      Decimal  @db.Decimal(18, 2)
+  notes          String?  @db.Text
+  expiresAt      DateTime
+  isSelected     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  request  GuaranteeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  provider FinancialPartner? @relation("GuaranteeProvider", fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+  @@index([providerId])
+}
+
+model InsuranceRequest {
+  id             String               @id @default(cuid())
+  userId         String
+  tenderId       String?
+  type           InsuranceType
+  coverageAmount Decimal              @db.Decimal(18, 2)
+  duration       Int                  // ay
+  description    String?              @db.Text
+  status         FinanceRequestStatus @default(BEKLEMEDE)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  user   User    @relation("InsuranceRequester", fields: [userId], references: [id], onDelete: Cascade)
+  tender Tender? @relation("InsuranceTender", fields: [tenderId], references: [id], onDelete: SetNull)
+  offers InsuranceOffer[]
+
+  @@index([userId])
+  @@index([tenderId])
+  @@index([status])
+  @@index([type])
+}
+
+model InsuranceOffer {
+  id              String   @id @default(cuid())
+  requestId       String
+  providerId      String?
+  providerName    String
+  premium         Decimal  @db.Decimal(18, 2) // yıllık prim
+  deductible      Decimal  @db.Decimal(18, 2) // muafiyet
+  coverageDetails Json?
+  processingDays  Int      @default(3)
+  notes           String?  @db.Text
+  expiresAt       DateTime
+  isSelected      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  request  InsuranceRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  provider FinancialPartner? @relation("InsuranceProvider", fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+  @@index([providerId])
+}
+
+model FinancialPartner {
+  id             String               @id @default(cuid())
+  name           String
+  type           FinancialPartnerType
+  logoUrl        String?
+  contactEmail   String?
+  contactPhone   String?
+  website        String?
+  webhookUrl     String?              // gerçek entegrasyon için
+  isActive       Boolean              @default(true)
+  commissionRate Float                @default(0)
+  description    String?              @db.Text
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  guaranteeOffers GuaranteeOffer[] @relation("GuaranteeProvider")
+  insuranceOffers InsuranceOffer[] @relation("InsuranceProvider")
+  leadLogs        FinanceLeadLog[] @relation("LeadPartner")
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model FinanceLeadLog {
+  id         String   @id @default(cuid())
+  userId     String
+  partnerId  String
+  offerType  String   // "GUARANTEE" | "INSURANCE"
+  offerId    String
+  amount     Decimal  @db.Decimal(18, 2)
+  status     String   @default("YENI") // YENI, ILETILDI, DONUSUM
+  createdAt  DateTime @default(now())
+
+  user    User             @relation("LeadUser", fields: [userId], references: [id], onDelete: Cascade)
+  partner FinancialPartner @relation("LeadPartner", fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([partnerId])
+  @@index([offerType])
 }

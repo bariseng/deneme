@@ -15,6 +15,7 @@ const protectedPaths = [
   "/white-label",
   "/guvenlik",
   "/ortaklik",
+  "/finans",
 ];
 
 const authPaths = ["/giris", "/kayit"];
@@ -55,6 +56,7 @@ export const config = {
     "/white-label/:path*",
     "/guvenlik/:path*",
     "/ortaklik/:path*",
+    "/finans/:path*",
     "/giris",
     "/kayit",
   ],
