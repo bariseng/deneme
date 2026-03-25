@@ -28,7 +28,7 @@ const endpoints: { category: string; items: Endpoint[] }[] = [
     items: [
       {
         method: "GET",
-        path: "/api/v1/tenders",
+        path: "/api/tenders",
         description:
           "Tüm ihaleleri listeler. Filtreleme, sayfalama ve sıralama destekler.",
         params: [
@@ -69,7 +69,7 @@ const endpoints: { category: string; items: Endpoint[] }[] = [
       },
       {
         method: "GET",
-        path: "/api/v1/tenders/:id",
+        path: "/api/tenders/:id",
         description:
           "Belirtilen ID'ye sahip ihalenin tüm detaylarını döner.",
         responseExample: `{
@@ -93,7 +93,7 @@ const endpoints: { category: string; items: Endpoint[] }[] = [
     items: [
       {
         method: "GET",
-        path: "/api/v1/companies",
+        path: "/api/competitors",
         description: "Firma listesini getirir.",
         params: [
           { name: "q", type: "string", required: false, desc: "Firma adı arama" },
@@ -240,7 +240,7 @@ export default function APIDocsClient() {
             <div>
               <p className="text-xs text-foreground-light">Base URL</p>
               <p className="text-sm font-mono font-semibold text-foreground">
-                /api/v1
+                /api
               </p>
             </div>
           </div>

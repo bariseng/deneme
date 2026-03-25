@@ -1,0 +1,631 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── ENUMS ─────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  PREMIUM
+  USER
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum TenderType {
+  YAPIM
+  MAL_ALIMI
+  HIZMET
+  DANISMANLIK
+}
+
+enum TenderStatus {
+  BASVURU_ACIK
+  DEGERLENDIRME
+  SONUCLANDI
+  IPTAL
+  YAKLASAN
+}
+
+enum ApplicationStatus {
+  TASLAK
+  GONDERILDI
+  DEGERLENDIRMEDE
+  KABUL_EDILDI
+  REDDEDILDI
+  IPTAL
+}
+
+enum BidStatus {
+  TASLAK
+  TAMAMLANDI
+  GONDERILDI
+}
+
+enum NotificationType {
+  YENI_IHALE
+  SON_BASVURU
+  ZEYILNAME
+  SONUC
+  SISTEM
+}
+
+enum ConversationType {
+  GENEL
+  IHALE_ANALIZ
+  FIYAT_TAHMINI
+  RISK_ANALIZI
+  SARTNAME_OZETI
+}
+
+// ─── USER & AUTH ───────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  password      String?
+  image         String?
+  phone         String?
+  role          UserRole  @default(USER)
+  plan          SubscriptionPlan @default(FREE)
+  companyId     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company       Company?  @relation(fields: [companyId], references: [id])
+  accounts      Account[]
+  sessions      Session[]
+  favorites     Favorite[]
+  applications  Application[]
+  bids          Bid[]
+  notifications    Notification[]
+  notificationRules NotificationRule[]
+  searchHistory    SearchHistory[]
+  aiConversations  AiConversation[]
+  pushSubscriptions PushSubscription[]
+  activityLogs     ActivityLog[]
+
+  @@index([email])
+  @@index([companyId])
+  @@index([role])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── COMPANY ───────────────────────────────────────────────
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  taxNumber   String   @unique
+  taxOffice   String?
+  address     String?
+  city        String?
+  phone       String?
+  email       String?
+  website     String?
+  sector      String?
+  description String?  @db.Text
+  foundedYear Int?
+  employeeCount Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  bids        Bid[]
+  competitors CompetitorProfile[]
+
+  @@index([taxNumber])
+  @@index([city])
+  @@index([sector])
+}
+
+// ─── TENDER ────────────────────────────────────────────────
+
+model Tender {
+  id              String       @id @default(cuid())
+  title           String
+  institution     String
+  city            String
+  district        String?
+  tenderType      TenderType
+  status          TenderStatus @default(BASVURU_ACIK)
+  ekapNo          String?      @unique
+  ilanNo          String?
+  description     String?      @db.Text
+  requirements    String?      @db.Text
+  estimatedCost   Decimal?     @db.Decimal(18, 2)
+  guaranteeRate   Decimal?     @db.Decimal(5, 2)
+  publishDate     DateTime     @default(now())
+  deadline        DateTime
+  openingDate     DateTime?
+  latitude        Decimal?     @db.Decimal(10, 7)
+  longitude       Decimal?     @db.Decimal(10, 7)
+  contactPerson   String?
+  contactPhone    String?
+  contactEmail    String?
+  viewCount       Int          @default(0)
+  isFeatured      Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  documents       TenderDocument[]
+  timeline        TenderTimeline[]
+  results         TenderResult[]
+  favorites       Favorite[]
+  applications    Application[]
+  bids            Bid[]
+  notifications   Notification[]
+  similarFrom     SimilarTender[] @relation("SimilarFrom")
+  similarTo       SimilarTender[] @relation("SimilarTo")
+  aiSummaries     AiTenderSummary[]
+
+  @@index([city])
+  @@index([tenderType])
+  @@index([status])
+  @@index([deadline])
+  @@index([publishDate])
+  @@index([estimatedCost])
+  @@index([city, tenderType])
+  @@index([status, deadline])
+}
+
+model TenderDocument {
+  id         String   @id @default(cuid())
+  tenderId   String
+  name       String
+  category   String?
+  fileUrl    String?
+  fileSize   String?
+  mimeType   String?
+  uploadedAt DateTime @default(now())
+
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@index([tenderId])
+}
+
+model TenderTimeline {
+  id          String   @id @default(cuid())
+  tenderId    String
+  title       String
+  description String?
+  date        DateTime
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@index([tenderId])
+  @@index([date])
+}
+
+model TenderResult {
+  id            String   @id @default(cuid())
+  tenderId      String
+  winnerName    String
+  winnerTaxNo   String?
+  winnerAmount  Decimal  @db.Decimal(18, 2)
+  totalBidders  Int      @default(0)
+  resultDate    DateTime
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@index([tenderId])
+  @@index([winnerName])
+}
+
+model SimilarTender {
+  id        String @id @default(cuid())
+  fromId    String
+  toId      String
+  score     Float  @default(0)
+
+  fromTender Tender @relation("SimilarFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toTender   Tender @relation("SimilarTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId])
+  @@index([fromId])
+  @@index([toId])
+}
+
+// ─── FAVORITES & APPLICATIONS ──────────────────────────────
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  tenderId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenderId])
+  @@index([userId])
+  @@index([tenderId])
+}
+
+model Application {
+  id        String            @id @default(cuid())
+  userId    String
+  tenderId  String
+  status    ApplicationStatus @default(TASLAK)
+  bidAmount Decimal?          @db.Decimal(18, 2)
+  notes     String?           @db.Text
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenderId])
+  @@index([userId])
+  @@index([tenderId])
+  @@index([status])
+}
+
+// ─── BIDS ──────────────────────────────────────────────────
+
+model Bid {
+  id          String    @id @default(cuid())
+  userId      String
+  tenderId    String
+  companyId   String?
+  status      BidStatus @default(TASLAK)
+  totalAmount Decimal?  @db.Decimal(18, 2)
+  kdvRate     Decimal   @default(20) @db.Decimal(5, 2)
+  notes       String?   @db.Text
+  letterContent String? @db.Text
+  companyName   String?
+  companyTaxNo  String?
+  companyAddress String?
+  companyPhone  String?
+  companyEmail  String?
+  contactPerson String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tender  Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id])
+  items   BidItem[]
+
+  @@index([userId])
+  @@index([tenderId])
+  @@index([status])
+  @@index([userId, createdAt])
+}
+
+model BidItem {
+  id          String  @id @default(cuid())
+  bidId       String
+  description String
+  unit        String
+  quantity    Decimal @db.Decimal(18, 4)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  totalPrice  Decimal @db.Decimal(18, 2)
+  sortOrder   Int     @default(0)
+
+  bid Bid @relation(fields: [bidId], references: [id], onDelete: Cascade)
+
+  @@index([bidId])
+}
+
+// ─── NOTIFICATIONS ─────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  tenderId  String?
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tender Tender? @relation(fields: [tenderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model NotificationRule {
+  id         String       @id @default(cuid())
+  userId     String
+  name       String
+  isActive   Boolean      @default(true)
+  cities     String[]
+  tenderTypes TenderType[]
+  keywords   String[]
+  budgetMin  Decimal?     @db.Decimal(18, 2)
+  budgetMax  Decimal?     @db.Decimal(18, 2)
+  emailNotify Boolean     @default(true)
+  pushNotify  Boolean     @default(false)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+// ─── COMPETITORS ───────────────────────────────────────────
+
+model CompetitorProfile {
+  id           String   @id @default(cuid())
+  companyId    String?
+  name         String
+  taxNumber    String?  @unique
+  city         String?
+  sector       String?
+  totalWins    Int      @default(0)
+  totalBids    Int      @default(0)
+  totalAmount  Decimal  @default(0) @db.Decimal(18, 2)
+  avgBidAmount Decimal  @default(0) @db.Decimal(18, 2)
+  winRate      Decimal  @default(0) @db.Decimal(5, 2)
+  lastActivity DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company     Company?  @relation(fields: [companyId], references: [id])
+  experiences CompetitorExperience[]
+
+  @@index([name])
+  @@index([taxNumber])
+  @@index([city])
+  @@index([sector])
+}
+
+model CompetitorExperience {
+  id           String   @id @default(cuid())
+  competitorId String
+  tenderTitle  String
+  institution  String
+  city         String?
+  amount       Decimal  @db.Decimal(18, 2)
+  year         Int
+  isWon        Boolean  @default(false)
+
+  competitor CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId])
+  @@index([year])
+}
+
+// ─── AI ────────────────────────────────────────────────────
+
+model AiConversation {
+  id               String           @id @default(cuid())
+  userId           String
+  tenderId         String?
+  conversationType ConversationType @default(GENEL)
+  title            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([userId])
+  @@index([conversationType])
+}
+
+model AiMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+model AiTenderSummary {
+  id         String   @id @default(cuid())
+  tenderId   String
+  summary    String   @db.Text
+  keyDates   String?  @db.Text
+  risks      String?  @db.Text
+  effortLevel String?
+  confidence Float?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@index([tenderId])
+}
+
+// ─── SEARCH ────────────────────────────────────────────────
+
+model SearchHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  query     String
+  filters   Json?
+  resultCount Int    @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ─── PUSH SUBSCRIPTIONS ───────────────────────────────────
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ─── STATS ─────────────────────────────────────────────────
+
+model DailyStats {
+  id              String   @id @default(cuid())
+  date            DateTime @unique
+  totalTenders    Int      @default(0)
+  newTenders      Int      @default(0)
+  closingTenders  Int      @default(0)
+  totalBudget     Decimal  @default(0) @db.Decimal(18, 2)
+  avgBudget       Decimal  @default(0) @db.Decimal(18, 2)
+  totalUsers      Int      @default(0)
+  activeUsers     Int      @default(0)
+  totalSearches   Int      @default(0)
+  totalPageViews  Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([date])
+}
+
+model SectorStats {
+  id          String   @id @default(cuid())
+  month       String
+  sector      String
+  tenderCount Int      @default(0)
+  totalBudget Decimal  @default(0) @db.Decimal(18, 2)
+  avgBudget   Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt   DateTime @default(now())
+
+  @@unique([month, sector])
+  @@index([month])
+}
+
+// ─── EKAP SYNC ─────────────────────────────────────────────
+
+model EkapSyncLog {
+  id           String   @id @default(cuid())
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  totalFetched Int      @default(0)
+  newRecords   Int      @default(0)
+  updatedRecords Int    @default(0)
+  errors       Int      @default(0)
+  errorDetails String?  @db.Text
+  status       String   @default("running")
+
+  @@index([startedAt])
+  @@index([status])
+}
+
+// ─── ACTIVITY LOG ──────────────────────────────────────────
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+// ─── PAYMENTS ──────────────────────────────────────────────
+
+model Payment {
+  id            String   @id @default(cuid())
+  userId        String
+  planId        String
+  amount        Decimal  @db.Decimal(18, 2)
+  currency      String   @default("TRY")
+  status        String   @default("pending")
+  provider      String   @default("iyzico")
+  providerTxId  String?
+  billingPeriod String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Subscription {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  plan        SubscriptionPlan @default(FREE)
+  status      String    @default("active")
+  startDate   DateTime  @default(now())
+  endDate     DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([endDate])
+}

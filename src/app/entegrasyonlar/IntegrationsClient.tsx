@@ -41,7 +41,7 @@ const integrations: Integration[] = [
     icon: Database,
     status: "demo",
     lastSync: "2026-03-25T08:00:00Z",
-    syncEndpoint: "/api/ekap",
+    syncEndpoint: "/api/cron/sync",
     envVars: ["EKAP_API_URL", "EKAP_API_KEY", "EKAP_API_SECRET"],
   },
   {
@@ -53,7 +53,7 @@ const integrations: Integration[] = [
     icon: Globe,
     status: "demo",
     lastSync: "2026-03-25T07:30:00Z",
-    syncEndpoint: "/api/ilan",
+    syncEndpoint: "/api/cron/sync",
     envVars: ["ILAN_GOV_API_URL"],
   },
   {
@@ -283,14 +283,16 @@ export default function IntegrationsClient() {
               </thead>
               <tbody>
                 {[
-                  ["GET", "/api/v1/tenders", "İhale listesi", "Herkese açık"],
-                  ["GET", "/api/v1/tenders/:id", "İhale detay", "Herkese açık"],
-                  ["GET", "/api/v1/companies", "Firma listesi", "Herkese açık"],
-                  ["POST", "/api/ekap", "EKAP senkronizasyon", "Admin"],
-                  ["POST", "/api/ilan", "ilan.gov.tr senkronizasyon", "Admin"],
-                  ["POST", "/api/notifications", "E-posta gönder", "Sistem"],
+                  ["GET", "/api/tenders", "İhale listesi", "Herkese açık"],
+                  ["GET", "/api/tenders/:id", "İhale detay", "Herkese açık"],
+                  ["GET", "/api/tenders/search", "İhale arama", "Herkese açık"],
+                  ["GET", "/api/competitors", "Rakip arama", "Herkese açık"],
+                  ["GET", "/api/favorites", "Favori listesi", "Kullanıcı"],
+                  ["GET", "/api/dashboard", "Dashboard verileri", "Kullanıcı"],
+                  ["POST", "/api/cron/sync", "EKAP senkronizasyon", "Admin"],
+                  ["POST", "/api/notifications", "Bildirimler", "Kullanıcı"],
+                  ["POST", "/api/bids", "Teklif oluştur", "Kullanıcı"],
                   ["POST", "/api/payments", "Ödeme oturumu", "Kullanıcı"],
-                  ["POST", "/api/payments/webhook", "Ödeme webhook", "Sistem"],
                 ].map(([method, path, desc, access]) => (
                   <tr key={path} className="border-t border-border">
                     <td className="px-4 py-2">

@@ -1,9 +1,47 @@
 "use client";
 
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Mail, Lock, Eye } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError("E-posta veya şifre hatalı");
+      } else {
+        router.push(callbackUrl);
+        router.refresh();
+      }
+    } catch {
+      setError("Giriş sırasında bir hata oluştu");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-[calc(100vh-200px)] bg-background-alt flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-md">
@@ -22,7 +60,13 @@ export default function LoginForm() {
         </div>
 
         <div className="bg-white rounded-2xl border border-border shadow-sm p-8">
-          <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label
                 htmlFor="email"
@@ -38,6 +82,8 @@ export default function LoginForm() {
                 <input
                   id="email"
                   type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="ornek@email.com"
                   className="w-full h-11 pl-10 pr-4 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   autoComplete="email"
@@ -68,7 +114,9 @@ export default function LoginForm() {
                 />
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="********"
                   className="w-full h-11 pl-10 pr-10 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   autoComplete="current-password"
@@ -76,10 +124,11 @@ export default function LoginForm() {
                 />
                 <button
                   type="button"
+                  onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-light hover:text-foreground"
                   aria-label="Şifreyi göster"
                 >
-                  <Eye size={16} />
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
@@ -100,11 +149,17 @@ export default function LoginForm() {
 
             <button
               type="submit"
-              className="w-full h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl transition-colors"
+              disabled={loading}
+              className="w-full h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              Giriş Yap
+              {loading && <Loader2 size={18} className="animate-spin" />}
+              {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
             </button>
           </form>
+
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+            <strong>Demo hesap:</strong> admin@ihalepro.com / admin12345
+          </div>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-foreground-light">

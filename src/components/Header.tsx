@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 import {
   Menu,
   X,
@@ -9,6 +10,8 @@ import {
   User,
   ChevronDown,
   LogIn,
+  LogOut,
+  Settings,
 } from "lucide-react";
 import NotificationCenter from "./NotificationCenter";
 
@@ -44,8 +47,10 @@ const navItems = [
 ];
 
 export default function Header() {
+  const { data: session } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
+  const isLoggedIn = !!session?.user;
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
@@ -64,28 +69,58 @@ export default function Header() {
             >
               Premium
             </Link>
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-1 hover:text-primary-light transition-colors"
-              aria-label="Kontrol paneli"
-            >
-              <User size={14} />
-              <span>Panelim</span>
-            </Link>
-            <Link
-              href="/giris"
-              className="flex items-center gap-1 hover:text-primary-light transition-colors"
-              aria-label="Giriş yap"
-            >
-              <LogIn size={14} />
-              <span>Giriş Yap</span>
-            </Link>
-            <Link
-              href="/kayit"
-              className="bg-secondary hover:bg-secondary-dark px-3 py-1 rounded text-xs font-semibold transition-colors"
-            >
-              Ücretsiz Kayıt
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-1 hover:text-primary-light transition-colors"
+                  aria-label="Kontrol paneli"
+                >
+                  <User size={14} />
+                  <span>Panelim</span>
+                </Link>
+                <Link
+                  href="/ayarlar"
+                  className="flex items-center gap-1 hover:text-primary-light transition-colors"
+                  aria-label="Ayarlar"
+                >
+                  <Settings size={14} />
+                  <span>Ayarlar</span>
+                </Link>
+                <button
+                  onClick={() => signOut({ callbackUrl: "/" })}
+                  className="flex items-center gap-1 hover:text-primary-light transition-colors"
+                >
+                  <LogOut size={14} />
+                  <span>Çıkış</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-1 hover:text-primary-light transition-colors"
+                  aria-label="Kontrol paneli"
+                >
+                  <User size={14} />
+                  <span>Panelim</span>
+                </Link>
+                <Link
+                  href="/giris"
+                  className="flex items-center gap-1 hover:text-primary-light transition-colors"
+                  aria-label="Giriş yap"
+                >
+                  <LogIn size={14} />
+                  <span>Giriş Yap</span>
+                </Link>
+                <Link
+                  href="/kayit"
+                  className="bg-secondary hover:bg-secondary-dark px-3 py-1 rounded text-xs font-semibold transition-colors"
+                >
+                  Ücretsiz Kayıt
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

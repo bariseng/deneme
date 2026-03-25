@@ -1,9 +1,98 @@
 "use client";
 
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Mail, Lock, User, Building2, Phone, Eye } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  User,
+  Building2,
+  Phone,
+  Eye,
+  EyeOff,
+  Loader2,
+  FileText,
+} from "lucide-react";
 
 export default function RegisterForm() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    password: "",
+    companyName: "",
+    taxNumber: "",
+    terms: false,
+  });
+
+  function updateField(field: string, value: string | boolean) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+
+    if (!form.terms) {
+      setError("Kullanım koşullarını kabul etmelisiniz");
+      return;
+    }
+
+    if (form.password.length < 8) {
+      setError("Şifre en az 8 karakter olmalıdır");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${form.firstName} ${form.lastName}`.trim(),
+          email: form.email,
+          password: form.password,
+          phone: form.phone || undefined,
+          companyName: form.companyName || undefined,
+          taxNumber: form.taxNumber || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Kayıt sırasında bir hata oluştu");
+        return;
+      }
+
+      const result = await signIn("credentials", {
+        email: form.email,
+        password: form.password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        router.push("/giris");
+      } else {
+        router.push("/dashboard");
+        router.refresh();
+      }
+    } catch {
+      setError("Kayıt sırasında bir hata oluştu");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-[calc(100vh-200px)] bg-background-alt flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-lg">
@@ -22,7 +111,13 @@ export default function RegisterForm() {
         </div>
 
         <div className="bg-white rounded-2xl border border-border shadow-sm p-8">
-          <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label
@@ -39,6 +134,8 @@ export default function RegisterForm() {
                   <input
                     id="firstName"
                     type="text"
+                    value={form.firstName}
+                    onChange={(e) => updateField("firstName", e.target.value)}
                     placeholder="Adınız"
                     className="w-full h-11 pl-10 pr-4 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     required
@@ -55,6 +152,8 @@ export default function RegisterForm() {
                 <input
                   id="lastName"
                   type="text"
+                  value={form.lastName}
+                  onChange={(e) => updateField("lastName", e.target.value)}
                   placeholder="Soyadınız"
                   className="w-full h-11 px-4 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   required
@@ -62,24 +161,50 @@ export default function RegisterForm() {
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="company"
-                className="block text-sm font-medium text-foreground mb-1.5"
-              >
-                Firma Adı
-              </label>
-              <div className="relative">
-                <Building2
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-light"
-                />
-                <input
-                  id="company"
-                  type="text"
-                  placeholder="Firma adınız"
-                  className="w-full h-11 pl-10 pr-4 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="company"
+                  className="block text-sm font-medium text-foreground mb-1.5"
+                >
+                  Firma Adı
+                </label>
+                <div className="relative">
+                  <Building2
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-light"
+                  />
+                  <input
+                    id="company"
+                    type="text"
+                    value={form.companyName}
+                    onChange={(e) => updateField("companyName", e.target.value)}
+                    placeholder="Firma adınız"
+                    className="w-full h-11 pl-10 pr-4 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div>
+                <label
+                  htmlFor="taxNumber"
+                  className="block text-sm font-medium text-foreground mb-1.5"
+                >
+                  Vergi No
+                </label>
+                <div className="relative">
+                  <FileText
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-light"
+                  />
+                  <input
+                    id="taxNumber"
+                    type="text"
+                    value={form.taxNumber}
+                    onChange={(e) => updateField("taxNumber", e.target.value)}
+                    placeholder="1234567890"
+                    className="w-full h-11 pl-10 pr-4 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
               </div>
             </div>
 
@@ -98,6 +223,8 @@ export default function RegisterForm() {
                 <input
                   id="regEmail"
                   type="email"
+                  value={form.email}
+                  onChange={(e) => updateField("email", e.target.value)}
                   placeholder="ornek@email.com"
                   className="w-full h-11 pl-10 pr-4 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   autoComplete="email"
@@ -121,6 +248,8 @@ export default function RegisterForm() {
                 <input
                   id="phone"
                   type="tel"
+                  value={form.phone}
+                  onChange={(e) => updateField("phone", e.target.value)}
                   placeholder="05XX XXX XX XX"
                   className="w-full h-11 pl-10 pr-4 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
@@ -141,7 +270,9 @@ export default function RegisterForm() {
                 />
                 <input
                   id="regPassword"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
+                  value={form.password}
+                  onChange={(e) => updateField("password", e.target.value)}
                   placeholder="En az 8 karakter"
                   className="w-full h-11 pl-10 pr-10 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   autoComplete="new-password"
@@ -150,10 +281,11 @@ export default function RegisterForm() {
                 />
                 <button
                   type="button"
+                  onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-light hover:text-foreground"
                   aria-label="Şifreyi göster"
                 >
-                  <Eye size={16} />
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
@@ -162,6 +294,8 @@ export default function RegisterForm() {
               <input
                 id="terms"
                 type="checkbox"
+                checked={form.terms}
+                onChange={(e) => updateField("terms", e.target.checked)}
                 className="w-4 h-4 text-primary border-border rounded focus:ring-primary mt-0.5"
                 required
               />
@@ -179,9 +313,11 @@ export default function RegisterForm() {
 
             <button
               type="submit"
-              className="w-full h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl transition-colors"
+              disabled={loading}
+              className="w-full h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              Ücretsiz Kayıt Ol
+              {loading && <Loader2 size={18} className="animate-spin" />}
+              {loading ? "Kayıt yapılıyor..." : "Ücretsiz Kayıt Ol"}
             </button>
           </form>
 

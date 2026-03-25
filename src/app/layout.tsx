@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import AIChatbot from "@/components/AIChatbot";
 import PWAProvider from "@/components/PWAProvider";
 import BottomNav from "@/components/BottomNav";
+import Providers from "@/components/Providers";
 
 const inter = localFont({
   src: [
@@ -106,12 +107,14 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <Header />
-        <main className="flex-1 pb-16 lg:pb-0">{children}</main>
-        <Footer />
-        <BottomNav />
-        <AIChatbot />
-        <PWAProvider />
+        <Providers>
+          <Header />
+          <main className="flex-1 pb-16 lg:pb-0">{children}</main>
+          <Footer />
+          <BottomNav />
+          <AIChatbot />
+          <PWAProvider />
+        </Providers>
       </body>
     </html>
   );
