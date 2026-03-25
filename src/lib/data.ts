@@ -1,3 +1,25 @@
+export type TimelineEventType =
+  | "publish"
+  | "question_deadline"
+  | "amendment"
+  | "application_deadline"
+  | "opening"
+  | "result";
+
+export interface TimelineEvent {
+  type: TimelineEventType;
+  label: string;
+  date: string;
+  completed: boolean;
+  note?: string;
+}
+
+export interface TenderDocument {
+  name: string;
+  size: string;
+  category: "sartname" | "teknik" | "sozlesme" | "diger";
+}
+
 export interface Tender {
   id: string;
   title: string;
@@ -13,7 +35,10 @@ export interface Tender {
   status: "active" | "closed" | "upcoming";
   description: string;
   ekapNo: string;
-  documents: { name: string; size: string }[];
+  documents: TenderDocument[];
+  timeline: TimelineEvent[];
+  /** lat,lng for map display */
+  coordinates?: { lat: number; lng: number };
 }
 
 export const institutionTypes = [
@@ -119,7 +144,103 @@ export const cities = [
   "Zonguldak",
 ];
 
-export const tenders: Tender[] = [
+/** City coordinates for map embeds */
+export const cityCoordinates: Record<string, { lat: number; lng: number }> = {
+  Adana: { lat: 37.0, lng: 35.3213 },
+  Ankara: { lat: 39.9334, lng: 32.8597 },
+  Antalya: { lat: 36.8969, lng: 30.7133 },
+  Balıkesir: { lat: 39.6484, lng: 27.8826 },
+  Bursa: { lat: 40.1885, lng: 29.0610 },
+  Denizli: { lat: 37.7765, lng: 29.0864 },
+  Diyarbakır: { lat: 37.9144, lng: 40.2306 },
+  Erzurum: { lat: 39.9043, lng: 41.2679 },
+  Eskişehir: { lat: 39.7667, lng: 30.5256 },
+  Gaziantep: { lat: 37.0662, lng: 37.3833 },
+  Hatay: { lat: 36.4018, lng: 36.3498 },
+  İstanbul: { lat: 41.0082, lng: 28.9784 },
+  İzmir: { lat: 38.4192, lng: 27.1287 },
+  Kayseri: { lat: 38.7312, lng: 35.4787 },
+  Kocaeli: { lat: 40.8533, lng: 29.8815 },
+  Konya: { lat: 37.8746, lng: 32.4932 },
+  Mersin: { lat: 36.8121, lng: 34.6415 },
+  Muğla: { lat: 37.2153, lng: 28.3636 },
+  Samsun: { lat: 41.2928, lng: 36.3313 },
+  Şanlıurfa: { lat: 37.1591, lng: 38.7969 },
+  Tekirdağ: { lat: 40.9781, lng: 27.5126 },
+  Trabzon: { lat: 41.0027, lng: 39.7168 },
+};
+
+/** Generate a standard timeline for a tender */
+function genTimeline(
+  publishDate: string,
+  deadline: string,
+  status: "active" | "closed" | "upcoming"
+): TimelineEvent[] {
+  const pub = new Date(publishDate);
+  const dl = new Date(deadline);
+  const now = Date.now();
+
+  const questionDeadline = new Date(pub.getTime() + (dl.getTime() - pub.getTime()) * 0.4);
+  const amendmentDate = new Date(pub.getTime() + (dl.getTime() - pub.getTime()) * 0.5);
+  const openingDate = new Date(dl.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const resultDate = new Date(dl.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+
+  return [
+    {
+      type: "publish" as TimelineEventType,
+      label: "İlan Tarihi",
+      date: publishDate,
+      completed: now >= pub.getTime(),
+    },
+    {
+      type: "question_deadline" as TimelineEventType,
+      label: "Son Soru Sorma Tarihi",
+      date: fmt(questionDeadline),
+      completed: now >= questionDeadline.getTime(),
+    },
+    {
+      type: "amendment" as TimelineEventType,
+      label: "Zeyilname / Düzeltme",
+      date: fmt(amendmentDate),
+      completed: now >= amendmentDate.getTime(),
+      note: status === "closed" ? "Zeyilname yayınlandı" : undefined,
+    },
+    {
+      type: "application_deadline" as TimelineEventType,
+      label: "Son Başvuru Tarihi",
+      date: deadline,
+      completed: now >= dl.getTime(),
+    },
+    {
+      type: "opening" as TimelineEventType,
+      label: "İhale Açıklama Tarihi",
+      date: fmt(openingDate),
+      completed: status === "closed" && now >= openingDate.getTime(),
+    },
+    {
+      type: "result" as TimelineEventType,
+      label: "Sonuç Açıklama",
+      date: fmt(resultDate),
+      completed: status === "closed" && now >= resultDate.getTime(),
+      note: status === "closed" ? "Sonuçlar açıklandı" : undefined,
+    },
+  ];
+}
+
+/** Add category info to documents */
+function categorizeDoc(name: string): TenderDocument["category"] {
+  const n = name.toLowerCase();
+  if (n.includes("teknik")) return "teknik";
+  if (n.includes("sözleşme") || n.includes("sozlesme")) return "sozlesme";
+  if (n.includes("şartname") || n.includes("idari") || n.includes("ihale doküman") || n.includes("ihale şartname")) return "sartname";
+  return "diger";
+}
+
+const _rawTenders: (Omit<Tender, "timeline" | "coordinates" | "documents"> & {
+  documents: { name: string; size: string }[];
+})[] = [
   {
     id: "1",
     title: "Ankara-Sivas YHT Hattı 2. Etap Yapım İşi",
@@ -741,6 +862,17 @@ export const tenders: Tender[] = [
     ],
   },
 ];
+
+/** Transform raw tenders: add timeline, coordinates, and categorize docs */
+export const tenders: Tender[] = _rawTenders.map((t) => ({
+  ...t,
+  documents: t.documents.map((d) => ({
+    ...d,
+    category: categorizeDoc(d.name),
+  })),
+  timeline: genTimeline(t.publishDate, t.deadline, t.status),
+  coordinates: cityCoordinates[t.city],
+}));
 
 export const stats = [
   { label: "Aktif İhale", value: "12.450+" },
