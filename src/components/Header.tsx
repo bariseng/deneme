@@ -33,6 +33,7 @@ const navItems = [
     label: "Hizmetlerimiz",
     href: "#",
     children: [
+      { label: "Proje Yönetimi", href: "/projeler" },
       { label: "Rakip Analizi", href: "/firmalar" },
       { label: "Teklif Hazırlama", href: "/teklifler" },
       { label: "AI Özellikleri", href: "/ai" },
