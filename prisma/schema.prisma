@@ -254,6 +254,13 @@ model Tender {
   contactPerson   String?
   contactPhone    String?
   contactEmail    String?
+  source          String?      @default("EKAP")
+  oksCodes        Json?
+  eIhale          Boolean      @default(false)
+  foreignAllowed  Boolean      @default(false)
+  partialBid      Boolean      @default(false)
+  jointPurchase   Boolean      @default(false)
+  announcementType String?
   viewCount       Int          @default(0)
   isFeatured      Boolean      @default(false)
   createdAt       DateTime     @default(now())
