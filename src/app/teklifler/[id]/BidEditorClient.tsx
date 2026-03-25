@@ -19,6 +19,7 @@ import {
   Copy,
   Building2,
   Printer,
+  Zap,
 } from "lucide-react";
 import {
   useBidStore,
@@ -30,11 +31,13 @@ import {
   type CostLineItem,
 } from "@/lib/bid-store";
 import { formatCurrency } from "@/lib/format";
+import SmartOptimizationPanel from "./SmartOptimizationPanel";
 
-type Tab = "cost" | "letter" | "company" | "notes";
+type Tab = "cost" | "optimize" | "letter" | "company" | "notes";
 
 const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "cost", label: "Maliyet Hesaplama", icon: Calculator },
+  { key: "optimize", label: "Akıllı Optimizasyon", icon: Zap },
   { key: "letter", label: "Teklif Mektubu", icon: FileText },
   { key: "company", label: "Firma Bilgileri", icon: Building2 },
   { key: "notes", label: "Notlar", icon: StickyNote },
@@ -281,6 +284,13 @@ export default function BidEditorClient({ bidId }: { bidId: string }) {
               addCostItem={addCostItem}
               updateCostItem={updateCostItem}
               removeCostItem={removeCostItem}
+            />
+          )}
+          {activeTab === "optimize" && (
+            <SmartOptimizationPanel
+              tenderId={bid.tenderId}
+              items={bid.costItems}
+              totalAmount={total}
             />
           )}
           {activeTab === "letter" && (
