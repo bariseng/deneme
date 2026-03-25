@@ -8,9 +8,9 @@ import {
   Search,
   User,
   ChevronDown,
-  Bell,
   LogIn,
 } from "lucide-react";
+import NotificationCenter from "./NotificationCenter";
 
 const navItems = [
   { label: "Ana Sayfa", href: "/" },
@@ -151,13 +151,7 @@ export default function Header() {
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-light"
               />
             </div>
-            <button
-              className="relative p-2 text-foreground-light hover:text-primary transition-colors"
-              aria-label="Bildirimler"
-            >
-              <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-secondary rounded-full" />
-            </button>
+            <NotificationCenter />
             <Link
               href="/giris"
               className="p-2 text-foreground-light hover:text-primary transition-colors"

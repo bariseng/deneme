@@ -1,6 +1,7 @@
 "use client";
 
-import { Bell, Mail, Smartphone, Save, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { Bell, Mail, Smartphone, Save, CheckCircle2, ExternalLink } from "lucide-react";
 import { useUserStore } from "@/lib/store";
 import { useState } from "react";
 
@@ -55,6 +56,22 @@ export default function NotificationSettings() {
             checked={notificationPrefs.emailApplicationUpdate}
             onChange={(v) =>
               updateNotificationPrefs({ emailApplicationUpdate: v })
+            }
+          />
+          <ToggleRow
+            label="Zeyilname / Düzeltme Bildirimi"
+            description="Takip ettiğiniz ihalelerde zeyilname yayınlandığında"
+            checked={notificationPrefs.emailAmendment}
+            onChange={(v) =>
+              updateNotificationPrefs({ emailAmendment: v })
+            }
+          />
+          <ToggleRow
+            label="İhale İptal Bildirimi"
+            description="Takip ettiğiniz bir ihale iptal edildiğinde"
+            checked={notificationPrefs.emailCancellation}
+            onChange={(v) =>
+              updateNotificationPrefs({ emailCancellation: v })
             }
           />
         </div>
@@ -113,6 +130,28 @@ export default function NotificationSettings() {
               {d} Gün Önce
             </button>
           ))}
+        </div>
+      </section>
+
+      {/* Rules link */}
+      <section className="bg-white rounded-xl border border-border p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Özel Bildirim Kuralları
+            </h3>
+            <p className="text-xs text-foreground-light mt-0.5">
+              İl, kategori ve bütçe bazlı otomatik bildirim kuralları
+              oluşturun.
+            </p>
+          </div>
+          <Link
+            href="/bildirimler"
+            className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium text-primary border border-primary/20 rounded-lg hover:bg-primary/5 transition-colors"
+          >
+            Kuralları Yönet
+            <ExternalLink size={14} />
+          </Link>
         </div>
       </section>
 
