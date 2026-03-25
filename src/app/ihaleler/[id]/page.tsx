@@ -19,6 +19,7 @@ import TenderTimeline from "./TenderTimeline";
 import SimilarTenders from "./SimilarTenders";
 import TenderMap from "./TenderMap";
 import ShareButtons from "./ShareButtons";
+import AIAnalysis from "./AIAnalysis";
 import { tenders } from "@/lib/data";
 import { notFound } from "next/navigation";
 
@@ -142,6 +143,9 @@ export default async function TenderDetailPage({ params }: PageProps) {
                 {tender.description}
               </p>
             </section>
+
+            {/* AI Analysis */}
+            <AIAnalysis tender={tender} />
 
             {/* Timeline */}
             <TenderTimeline events={tender.timeline} />

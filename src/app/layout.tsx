@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import AIChatbot from "@/components/AIChatbot";
 
 const inter = localFont({
   src: [
@@ -93,6 +94,7 @@ export default function RootLayout({
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />
+        <AIChatbot />
       </body>
     </html>
   );
