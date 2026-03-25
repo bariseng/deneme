@@ -10,6 +10,7 @@ const protectedPaths = [
   "/projeler",
   "/belgeler",
   "/istihbarat",
+  "/sozlesmeler",
 ];
 
 const authPaths = ["/giris", "/kayit"];
@@ -45,6 +46,7 @@ export const config = {
     "/projeler/:path*",
     "/belgeler/:path*",
     "/istihbarat/:path*",
+    "/sozlesmeler/:path*",
     "/giris",
     "/kayit",
   ],

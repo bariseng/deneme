@@ -127,6 +127,8 @@ model User {
   documentVersions   DocumentVersion[]
   signatureRequests  SignatureRequest[] @relation("SignatureSigner")
   approvalSteps      ApprovalWorkflow[] @relation("ApprovalApprover")
+  contracts          Contract[]         @relation("ContractOwner")
+  supplierRatings    SupplierRating[]   @relation("SupplierRater")
 
   @@index([email])
   @@index([companyId])
@@ -242,6 +244,7 @@ model Tender {
   agentResults    AgentResult[]
   winProbabilities WinProbability[]
   projects         Project[]
+  contracts        Contract[]
 
   @@index([city])
   @@index([tenderType])
@@ -1092,4 +1095,167 @@ model CompetitionDensity {
   @@index([city])
   @@index([sector])
   @@index([period])
+}
+
+// ─── CONTRACT & PERFORMANCE MANAGEMENT (EK 7) ──────────
+
+enum ContractStatus {
+  TASLAK
+  AKTIF
+  DEVAM_EDIYOR
+  TAMAMLANDI
+  FESHEDILDI
+  ASKIYA_ALINDI
+}
+
+enum PaymentStatus {
+  HAZIRLANIYOR
+  ONAY_BEKLIYOR
+  ONAYLANDI
+  ODENDI
+  REDDEDILDI
+}
+
+enum GuaranteeType {
+  GECICI_TEMINAT
+  KESIN_TEMINAT
+  AVANS_TEMINAT
+  EK_KESIN_TEMINAT
+}
+
+enum GuaranteeStatus {
+  AKTIF
+  IADE_EDILDI
+  NAKDE_CEVRILDI
+  SURESI_DOLDU
+}
+
+model Contract {
+  id              String         @id @default(cuid())
+  tenderId        String
+  userId          String
+  contractNo      String?        @unique
+  title           String
+  status          ContractStatus @default(TASLAK)
+  contractDate    DateTime
+  startDate       DateTime
+  endDate         DateTime
+  totalAmount     Decimal        @db.Decimal(18, 2)
+  kdvRate         Decimal        @default(20) @db.Decimal(5, 2)
+  advanceRate     Decimal?       @db.Decimal(5, 2)
+  penaltyRate     Decimal?       @db.Decimal(5, 2)    // daily penalty rate
+  penaltyDetails  String?        @db.Text
+  warrantyMonths  Int            @default(12)
+  notes           String?        @db.Text
+  completionRate  Float          @default(0)           // 0-100
+  paidAmount      Decimal        @default(0) @db.Decimal(18, 2)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  tender          Tender           @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  user            User             @relation("ContractOwner", fields: [userId], references: [id], onDelete: Cascade)
+  payments        ProgressPayment[]
+  workProgress    WorkProgress[]
+  guarantees      Guarantee[]
+
+  @@index([tenderId])
+  @@index([userId])
+  @@index([status])
+  @@index([endDate])
+  @@index([createdAt])
+}
+
+model ProgressPayment {
+  id              String        @id @default(cuid())
+  contractId      String
+  periodNo        Int           // hakediş no: 1, 2, 3...
+  periodStart     DateTime
+  periodEnd       DateTime
+  description     String?       @db.Text
+  grossAmount     Decimal       @db.Decimal(18, 2)
+  deductions      Decimal       @default(0) @db.Decimal(18, 2)  // kesintiler
+  netAmount       Decimal       @db.Decimal(18, 2)
+  cumulativeRate  Float         @default(0)   // cumulative completion %
+  status          PaymentStatus @default(HAZIRLANIYOR)
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  notes           String?       @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, periodNo])
+  @@index([contractId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model WorkProgress {
+  id              String   @id @default(cuid())
+  contractId      String
+  title           String
+  description     String?  @db.Text
+  completionRate  Float    @default(0)   // 0-100
+  isMilestone     Boolean  @default(false)
+  milestoneDate   DateTime?
+  photos          Json?    // [{ url, caption, uploadedAt }]
+  reportDate      DateTime @default(now())
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@index([isMilestone])
+  @@index([reportDate])
+}
+
+model SupplierRating {
+  id              String   @id @default(cuid())
+  userId          String
+  supplierName    String
+  supplierTaxNo   String?
+  contractTitle   String?
+  deliveryScore   Float    @default(0)   // 1-5
+  qualityScore    Float    @default(0)   // 1-5
+  communicationScore Float @default(0)   // 1-5
+  priceScore      Float    @default(0)   // 1-5
+  overallScore    Float    @default(0)   // average
+  comment         String?  @db.Text
+  ratingDate      DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation("SupplierRater", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, supplierName, contractTitle])
+  @@index([userId])
+  @@index([supplierName])
+  @@index([overallScore])
+}
+
+model Guarantee {
+  id              String          @id @default(cuid())
+  contractId      String
+  type            GuaranteeType
+  status          GuaranteeStatus @default(AKTIF)
+  bankName        String
+  letterNo        String?
+  amount          Decimal         @db.Decimal(18, 2)
+  issueDate       DateTime
+  expiryDate      DateTime
+  returnDate      DateTime?
+  notes           String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@index([type])
+  @@index([status])
+  @@index([expiryDate])
 }
