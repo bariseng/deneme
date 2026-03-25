@@ -117,7 +117,10 @@ model User {
   firmProfile      FirmProfile?
   agentTasks       AgentTask[]
   agentResults     AgentResult[]
-  bidSimulations   BidSimulation[]
+  bidSimulations     BidSimulation[]
+  usageQuotas        UsageQuota[]
+  creditTransactions CreditTransaction[]
+  trialPeriod        TrialPeriod?
 
   @@index([email])
   @@index([companyId])
@@ -783,4 +786,59 @@ model WinProbability {
   @@index([tenderId])
   @@index([bidAmount])
   @@index([calculatedAt])
+}
+
+// ─── PREMIUM MONETIZATION ───────────────────────────────
+
+model UsageQuota {
+  id        String   @id @default(cuid())
+  userId    String
+  feature   String   // "tender_view", "favorite", "notification", "bid", "ai_credit", "competitor"
+  used      Int      @default(0)
+  limit     Int      // -1 = unlimited
+  resetAt   DateTime // Monthly reset date
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, feature])
+  @@index([userId])
+  @@index([feature])
+  @@index([resetAt])
+}
+
+model CreditTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // "debit", "credit", "reset", "bonus", "purchase"
+  amount      Int      // negative for usage, positive for addition
+  balance     Int      // running balance after transaction
+  description String
+  feature     String?  // "chat", "summary", "estimate", "swot", "bid_draft", "match"
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+model TrialPeriod {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  plan       SubscriptionPlan
+  startDate  DateTime  @default(now())
+  endDate    DateTime
+  converted  Boolean   @default(false)
+  cancelledAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([endDate])
+  @@index([converted])
 }

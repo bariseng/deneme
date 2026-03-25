@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { useAICredit } from "@/lib/quota";
 import { generateSWOT } from "@/lib/agent/swot-analyzer";
 
 export async function POST(request: NextRequest) {
@@ -10,6 +11,17 @@ export async function POST(request: NextRequest) {
 
     if (!tenderId) {
       return NextResponse.json({ error: "İhale ID zorunludur" }, { status: 400 });
+    }
+
+    // AI credit check
+    if (user) {
+      const credit = await useAICredit(user.id, "swot", "SWOT Analizi");
+      if (!credit.success) {
+        return NextResponse.json(
+          { error: credit.message, upgradeRequired: true },
+          { status: 403 }
+        );
+      }
     }
 
     const tender = await prisma.tender.findUnique({

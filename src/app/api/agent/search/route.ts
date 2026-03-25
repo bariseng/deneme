@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { useAICredit } from "@/lib/quota";
 import { parseNaturalLanguage } from "@/lib/agent/nlp-parser";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -11,6 +12,17 @@ export async function POST(request: NextRequest) {
 
     if (!query) {
       return NextResponse.json({ error: "Sorgu zorunludur" }, { status: 400 });
+    }
+
+    // AI credit check
+    if (user) {
+      const credit = await useAICredit(user.id, "search", "AI Arama");
+      if (!credit.success) {
+        return NextResponse.json(
+          { error: credit.message, upgradeRequired: true },
+          { status: 403 }
+        );
+      }
     }
 
     const parsed = parseNaturalLanguage(query);

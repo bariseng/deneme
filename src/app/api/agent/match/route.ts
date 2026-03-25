@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
+import { useAICredit } from "@/lib/quota";
 import { calculateMatchScore } from "@/lib/agent/matcher";
 
 export async function POST() {
   try {
     const user = await requireAuth();
+
+    // AI credit check
+    const credit = await useAICredit(user.id, "match", "İhale Eşleştirme");
+    if (!credit.success) {
+      return NextResponse.json(
+        { error: credit.message, upgradeRequired: true },
+        { status: 403 }
+      );
+    }
 
     const profile = await prisma.firmProfile.findUnique({
       where: { userId: user.id },

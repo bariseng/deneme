@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { useAICredit } from "@/lib/quota";
 import { parseNaturalLanguage } from "@/lib/agent/nlp-parser";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -45,6 +46,17 @@ export async function POST(request: NextRequest) {
 
     if (!message) {
       return NextResponse.json({ error: "Mesaj zorunludur" }, { status: 400 });
+    }
+
+    // AI credit check
+    if (user) {
+      const credit = await useAICredit(user.id, "chat", "AI Sohbet");
+      if (!credit.success) {
+        return NextResponse.json(
+          { error: credit.message, upgradeRequired: true },
+          { status: 403 }
+        );
+      }
     }
 
     let convoId = conversationId;

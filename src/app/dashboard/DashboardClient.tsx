@@ -22,6 +22,7 @@ import FollowedTenders from "./FollowedTenders";
 import AppliedTenders from "./AppliedTenders";
 import DeadlineCalendar from "./DeadlineCalendar";
 import NotificationSettings from "./NotificationSettings";
+import UsageDashboard from "@/components/UsageDashboard";
 
 type Tab =
   | "overview"
@@ -250,6 +251,9 @@ function OverviewTab() {
           )}
         </section>
       </div>
+
+      {/* Usage dashboard */}
+      <UsageDashboard />
 
       {/* Quick actions */}
       <section className="bg-white rounded-xl border border-border p-5">

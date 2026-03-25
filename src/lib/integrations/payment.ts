@@ -8,7 +8,7 @@
  *   or STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
  */
 
-export type PlanId = "free" | "starter" | "pro" | "enterprise";
+export type PlanId = "free" | "pro" | "enterprise";
 
 export interface PricingPlan {
   id: PlanId;
@@ -18,14 +18,20 @@ export interface PricingPlan {
   features: string[];
   highlighted?: boolean;
   limit: {
-    tenderAlerts: number; // -1 = unlimited
-    savedSearches: number;
+    tenderViews: number; // -1 = unlimited
+    favorites: number;
+    notifications: number;
     competitorTracking: number;
-    bidTemplates: number;
+    bids: number;
+    aiCredits: number;
     apiAccess: boolean;
-    exportCSV: boolean;
-    aiFeatures: boolean;
+    pdfExport: boolean;
+    agenticAI: boolean;
+    smartBidOptimization: boolean;
+    weeklyBriefing: boolean;
+    multiUser: number; // seats, 0 = single
     prioritySupport: boolean;
+    slaGuarantee: boolean;
   };
 }
 
@@ -56,100 +62,98 @@ export const pricingPlans: PricingPlan[] = [
     price: 0,
     yearlyPrice: 0,
     features: [
-      "Günde 10 ihale bildirimi",
-      "3 kayıtlı arama",
-      "Temel ihale listeleme",
-      "Manuel ihale takibi",
+      "Günlük 10 ihale görüntüleme",
+      "Temel arama & filtreleme",
+      "3 favori ihale",
+      "Günlük 5 in-app bildirim",
     ],
     limit: {
-      tenderAlerts: 10,
-      savedSearches: 3,
+      tenderViews: 10,
+      favorites: 3,
+      notifications: 5,
       competitorTracking: 0,
-      bidTemplates: 1,
+      bids: 0,
+      aiCredits: 0,
       apiAccess: false,
-      exportCSV: false,
-      aiFeatures: false,
+      pdfExport: false,
+      agenticAI: false,
+      smartBidOptimization: false,
+      weeklyBriefing: false,
+      multiUser: 0,
       prioritySupport: false,
-    },
-  },
-  {
-    id: "starter",
-    name: "Başlangıç",
-    price: 299,
-    yearlyPrice: 2990,
-    features: [
-      "Günde 50 ihale bildirimi",
-      "10 kayıtlı arama",
-      "Rakip takibi (5 firma)",
-      "5 teklif şablonu",
-      "CSV dışa aktarma",
-      "E-posta bildirimleri",
-    ],
-    limit: {
-      tenderAlerts: 50,
-      savedSearches: 10,
-      competitorTracking: 5,
-      bidTemplates: 5,
-      apiAccess: false,
-      exportCSV: true,
-      aiFeatures: false,
-      prioritySupport: false,
+      slaGuarantee: false,
     },
   },
   {
     id: "pro",
     name: "Profesyonel",
-    price: 699,
-    yearlyPrice: 6990,
+    price: 499,
+    yearlyPrice: 4790,
     highlighted: true,
     features: [
-      "Sınırsız ihale bildirimi",
-      "Sınırsız kayıtlı arama",
-      "Rakip takibi (20 firma)",
-      "Sınırsız teklif şablonu",
-      "AI özellikleri (tam erişim)",
-      "Öncelikli destek",
-      "API erişimi",
-      "Gelişmiş raporlama",
+      "Sınırsız ihale görüntüleme & arama",
+      "Sınırsız favori & bildirim (e-posta + push)",
+      "Rakip analizi (5 firma takibi)",
+      "Teklif hazırlama araçları (aylık 20 teklif)",
+      "PDF export",
+      "Ayda 50 AI kredisi (chatbot + özet + tahmin)",
+      "Öncelikli müşteri desteği",
     ],
     limit: {
-      tenderAlerts: -1,
-      savedSearches: -1,
-      competitorTracking: 20,
-      bidTemplates: -1,
-      apiAccess: true,
-      exportCSV: true,
-      aiFeatures: true,
+      tenderViews: -1,
+      favorites: -1,
+      notifications: -1,
+      competitorTracking: 5,
+      bids: 20,
+      aiCredits: 50,
+      apiAccess: false,
+      pdfExport: true,
+      agenticAI: false,
+      smartBidOptimization: false,
+      weeklyBriefing: false,
+      multiUser: 0,
       prioritySupport: true,
+      slaGuarantee: false,
     },
   },
   {
     id: "enterprise",
     name: "Kurumsal",
-    price: 1499,
-    yearlyPrice: 14990,
+    price: 1999,
+    yearlyPrice: 19190,
     features: [
-      "Profesyonel'deki her şey",
-      "Sınırsız rakip takibi",
-      "Özel API entegrasyonu",
-      "Çoklu kullanıcı desteği",
-      "Özel eğitim ve danışmanlık",
-      "SLA garantisi (%99.9)",
-      "Beyaz etiket seçeneği",
-      "Özel raporlama",
+      "Profesyonel'deki her şey +",
+      "Sınırsız rakip takibi & AI kredisi",
+      "Agentic AI \"İhale Avcısı\" modu",
+      "Akıllı teklif optimizasyonu & fiyat tahmini",
+      "Haftalık AI brifing raporu",
+      "API erişimi (3. parti entegrasyon)",
+      "Çoklu kullanıcı (5 koltuk dahil, +₺199/koltuk)",
+      "Özel eğitim & onboarding",
+      "SLA garantisi (%99.9 uptime)",
     ],
     limit: {
-      tenderAlerts: -1,
-      savedSearches: -1,
+      tenderViews: -1,
+      favorites: -1,
+      notifications: -1,
       competitorTracking: -1,
-      bidTemplates: -1,
+      bids: -1,
+      aiCredits: -1,
       apiAccess: true,
-      exportCSV: true,
-      aiFeatures: true,
+      pdfExport: true,
+      agenticAI: true,
+      smartBidOptimization: true,
+      weeklyBriefing: true,
+      multiUser: 5,
       prioritySupport: true,
+      slaGuarantee: true,
     },
   },
 ];
+
+export function getPlanById(id: PlanId): PricingPlan | undefined {
+  return pricingPlans.find((p) => p.id === id);
+}
 
 class PaymentService {
   async createCheckout(
@@ -162,8 +166,6 @@ class PaymentService {
     if (plan.id === "free") throw new Error("Ücretsiz plan için ödeme gerekmez");
 
     const amount = billingPeriod === "yearly" ? plan.yearlyPrice : plan.price;
-
-    console.log(`[Payment] Creating checkout: ${planId} / ${billingPeriod} / ${amount} TRY`);
 
     // In production: iyzico or Stripe checkout session creation
     const session: CheckoutSession = {
@@ -181,27 +183,20 @@ class PaymentService {
   }
 
   async handleWebhook(event: PaymentWebhookEvent): Promise<void> {
-    console.log(`[Payment] Webhook: ${event.type} for session ${event.sessionId}`);
-
     switch (event.type) {
       case "payment.success":
-        // Activate subscription
-        console.log(`[Payment] Subscription activated: ${event.planId} for user ${event.userId}`);
+        // Activate subscription — handled by webhook route
         break;
       case "payment.failed":
-        console.log(`[Payment] Payment failed for user ${event.userId}`);
         break;
       case "subscription.cancelled":
-        console.log(`[Payment] Subscription cancelled for user ${event.userId}`);
         break;
       case "subscription.renewed":
-        console.log(`[Payment] Subscription renewed: ${event.planId} for user ${event.userId}`);
         break;
     }
   }
 
-  async cancelSubscription(userId: string): Promise<{ success: boolean }> {
-    console.log(`[Payment] Cancelling subscription for user ${userId}`);
+  async cancelSubscription(_userId: string): Promise<{ success: boolean }> {
     return { success: true };
   }
 }

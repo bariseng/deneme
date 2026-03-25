@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { useAICredit } from "@/lib/quota";
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Giriş yapmanız gerekiyor" }, { status: 401 });
+    }
+
+    // AI credit check
+    const credit = await useAICredit(user.id, "summary", "İhale Özeti");
+    if (!credit.success) {
+      return NextResponse.json(
+        { error: credit.message, upgradeRequired: true },
+        { status: 403 }
+      );
     }
 
     const { tenderId } = await request.json();
