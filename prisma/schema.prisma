@@ -66,6 +66,24 @@ enum ConversationType {
   FIYAT_TAHMINI
   RISK_ANALIZI
   SARTNAME_OZETI
+  AGENT_AVCI
+  SWOT_ANALIZ
+  TEKLIF_TASLAK
+}
+
+enum AgentTaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum AgentTaskType {
+  MATCH_SCAN
+  SWOT_ANALYSIS
+  BID_DRAFT
+  WEEKLY_BRIEFING
+  NLP_SEARCH
 }
 
 // ─── USER & AUTH ───────────────────────────────────────────
@@ -96,6 +114,9 @@ model User {
   aiConversations  AiConversation[]
   pushSubscriptions PushSubscription[]
   activityLogs     ActivityLog[]
+  firmProfile      FirmProfile?
+  agentTasks       AgentTask[]
+  agentResults     AgentResult[]
 
   @@index([email])
   @@index([companyId])
@@ -208,6 +229,7 @@ model Tender {
   similarFrom     SimilarTender[] @relation("SimilarFrom")
   similarTo       SimilarTender[] @relation("SimilarTo")
   aiSummaries     AiTenderSummary[]
+  agentResults    AgentResult[]
 
   @@index([city])
   @@index([tenderType])
@@ -628,4 +650,76 @@ model Subscription {
   @@index([userId])
   @@index([status])
   @@index([endDate])
+}
+
+// ─── AGENTIC AI ─────────────────────────────────────────
+
+model FirmProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  companyName     String
+  sectors         String[] // ["Yapım İşleri", "Bilişim"]
+  cities          String[] // ["İstanbul", "Ankara"]
+  maxBudget       Decimal  @db.Decimal(18, 2)
+  minBudget       Decimal  @default(0) @db.Decimal(18, 2)
+  preferredTypes  String[] // ["YAPIM", "HIZMET"]
+  experienceYears Int      @default(0)
+  keywords        String[] // ["altyapı", "beton", "yazılım"]
+  embedding       Float[]  // profile embedding vector
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentResults AgentResult[]
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model AgentTask {
+  id          String          @id @default(cuid())
+  userId      String
+  type        AgentTaskType
+  status      AgentTaskStatus @default(PENDING)
+  input       Json?           // task parameters
+  output      Json?           // task result summary
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  results AgentResult[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AgentResult {
+  id            String   @id @default(cuid())
+  taskId        String
+  userId        String
+  firmProfileId String?
+  tenderId      String?
+  matchScore    Float?   // 0-100 similarity score
+  analysis      Json     // detailed result data
+  actionTaken   String?  // e.g., "notification_sent", "bid_draft_created"
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  task        AgentTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firmProfile FirmProfile? @relation(fields: [firmProfileId], references: [id])
+  tender      Tender?      @relation(fields: [tenderId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([tenderId])
+  @@index([matchScore])
+  @@index([isRead])
+  @@index([createdAt])
 }

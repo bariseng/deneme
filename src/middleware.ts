@@ -6,6 +6,7 @@ const protectedPaths = [
   "/teklifler",
   "/ayarlar",
   "/raporlar",
+  "/agent",
 ];
 
 const authPaths = ["/giris", "/kayit"];
@@ -37,6 +38,7 @@ export const config = {
     "/teklifler/:path*",
     "/ayarlar/:path*",
     "/raporlar/:path*",
+    "/agent/:path*",
     "/giris",
     "/kayit",
   ],

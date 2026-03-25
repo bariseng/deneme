@@ -36,6 +36,7 @@ const navItems = [
       { label: "Rakip Analizi", href: "/firmalar" },
       { label: "Teklif Hazırlama", href: "/teklifler" },
       { label: "AI Özellikleri", href: "/ai" },
+      { label: "İhale Avcısı (AI)", href: "/agent" },
       { label: "Raporlama & Analitik", href: "/admin" },
       { label: "Entegrasyonlar", href: "/entegrasyonlar" },
       { label: "API Dokümantasyonu", href: "/api-docs" },
