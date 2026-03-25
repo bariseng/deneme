@@ -9,7 +9,7 @@ export type { RetryOptions, CircuitState, CircuitBreakerOptions } from "./error-
 // ─── Base Provider ──────────────────────────────────────────
 
 import { prisma } from "@/lib/prisma";
-import type { DataProvider, ProviderConfig, SyncResult, CacheConfig } from "./types";
+import type { DataProvider, ProviderConfig, SyncResult, CacheConfig, HealthCheckResult } from "./types";
 import { RateLimiter } from "./rate-limiter";
 import { ProviderCache } from "./cache";
 import { withRetry, CircuitBreaker } from "./error-handler";
@@ -51,7 +51,7 @@ export abstract class BaseProvider<T> implements DataProvider<T> {
   /**
    * Subclasses must implement a health check for the external service.
    */
-  abstract healthCheck(): Promise<boolean>;
+  abstract healthCheck(): Promise<HealthCheckResult>;
 
   // ── Public API ──────────────────────────────────────────────
 
