@@ -1976,3 +1976,60 @@ model Certificate {
   @@index([courseId])
   @@index([certificateNumber])
 }
+
+// ─── İHALE FİYAT ENDEKSİ ───────────────────────────────────
+
+enum PricePeriod {
+  MONTHLY
+  QUARTERLY
+}
+
+model UnitPriceIndex {
+  id          String   @id @default(cuid())
+  sector      String   // "YAPIM", "HIZMET", "MAL_ALIMI"
+  item        String   // "beton-c30", "demir-celik" vb.
+  itemLabel   String   // "Beton C30", "Demir Çelik" (görüntüleme)
+  unit        String   // "m³", "ton", "m²", "adet", "gün"
+  avgPrice    Decimal  @db.Decimal(18, 2)
+  minPrice    Decimal  @db.Decimal(18, 2)
+  maxPrice    Decimal  @db.Decimal(18, 2)
+  sampleCount Int      @default(0)
+  city        String?
+  month       DateTime @db.Date
+  source      String   @default("IHALE_SONUC") // "IHALE_SONUC", "PIYASA", "KIK"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([sector, item, city, month])
+  @@index([sector])
+  @@index([item])
+  @@index([city])
+  @@index([month])
+}
+
+model UnitPriceTrend {
+  id        String      @id @default(cuid())
+  sector    String
+  item      String
+  itemLabel String
+  prices    Json        // [{ month, avg, min, max, sampleCount }]
+  period    PricePeriod @default(MONTHLY)
+  updatedAt DateTime    @updatedAt
+
+  @@unique([sector, item, period])
+  @@index([sector])
+  @@index([item])
+}
+
+model RegionalPriceComparison {
+  id          String   @id @default(cuid())
+  item        String   @unique
+  itemLabel   String
+  sector      String
+  unit        String
+  comparisons Json     // [{ city, avg, min, max, sampleCount }]
+  updatedAt   DateTime @updatedAt
+
+  @@index([sector])
+  @@index([item])
+}

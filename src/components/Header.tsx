@@ -47,6 +47,7 @@ const navItems = [
       { label: "İş Ortaklığı", href: "/ortaklik" },
       { label: "Finans Marketplace", href: "/finans" },
       { label: "İhale Akademisi", href: "/akademi" },
+      { label: "Fiyat Endeksi", href: "/fiyat-endeksi" },
       { label: "Raporlama & Analitik", href: "/admin" },
       { label: "Entegrasyonlar", href: "/entegrasyonlar" },
       { label: "API Dokümantasyonu", href: "/api-docs" },
