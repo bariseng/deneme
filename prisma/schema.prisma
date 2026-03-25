@@ -102,7 +102,7 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  company       Company?  @relation(fields: [companyId], references: [id])
+  company       Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
   accounts      Account[]
   sessions      Session[]
   favorites     Favorite[]
@@ -409,7 +409,7 @@ model Bid {
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tender  Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
-  company Company? @relation(fields: [companyId], references: [id])
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items       BidItem[]
   simulations BidSimulation[]
 
@@ -494,7 +494,7 @@ model CompetitorProfile {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company     Company?  @relation(fields: [companyId], references: [id])
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   experiences CompetitorExperience[]
 
   @@index([name])
@@ -763,8 +763,8 @@ model AgentResult {
 
   task        AgentTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  firmProfile FirmProfile? @relation(fields: [firmProfileId], references: [id])
-  tender      Tender?      @relation(fields: [tenderId], references: [id])
+  firmProfile FirmProfile? @relation(fields: [firmProfileId], references: [id], onDelete: Cascade)
+  tender      Tender?      @relation(fields: [tenderId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
   @@index([userId])
@@ -2110,7 +2110,7 @@ model FinancialHealthScore {
   calculatedAt   DateTime  @default(now())
   validUntil     DateTime
 
-  company    Company? @relation("HealthScoreCompany", fields: [companyId], references: [id])
+  company    Company? @relation("HealthScoreCompany", fields: [companyId], references: [id], onDelete: SetNull)
   queries    FinancialHealthQuery[] @relation("HealthScoreQueries")
 
   @@index([companyId])
@@ -2127,8 +2127,8 @@ model FinancialHealthQuery {
   resultScoreId     String?
   queriedAt         DateTime @default(now())
 
-  user        User                  @relation("HealthQueryUser", fields: [userId], references: [id])
-  resultScore FinancialHealthScore? @relation("HealthScoreQueries", fields: [resultScoreId], references: [id])
+  user        User                  @relation("HealthQueryUser", fields: [userId], references: [id], onDelete: Cascade)
+  resultScore FinancialHealthScore? @relation("HealthScoreQueries", fields: [resultScoreId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([targetTaxNumber])
@@ -2143,7 +2143,7 @@ model CapacityAnalysis {
   utilizationPercent Float    @default(0)
   analyzedAt         DateTime @default(now())
 
-  company Company @relation("CapacityCompany", fields: [companyId], references: [id])
+  company Company @relation("CapacityCompany", fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([analyzedAt])
@@ -2278,7 +2278,7 @@ model CalendarEvent {
   updatedAt       DateTime          @updatedAt
 
   user      User           @relation("CalendarEventUser", fields: [userId], references: [id], onDelete: Cascade)
-  tender    Tender?        @relation("CalendarEventTender", fields: [tenderId], references: [id])
+  tender    Tender?        @relation("CalendarEventTender", fields: [tenderId], references: [id], onDelete: SetNull)
   reminders SmartReminder[] @relation("ReminderEvent")
 
   @@index([userId])

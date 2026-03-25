@@ -52,6 +52,7 @@ const navItems = [
       { label: "Mevzuat Radarı", href: "/mevzuat" },
       { label: "Uluslararası İhaleler", href: "/uluslararasi" },
       { label: "Akıllı Takvim", href: "/takvim" },
+      { label: "Bildirimler", href: "/bildirimler" },
       { label: "Raporlama & Analitik", href: "/admin" },
       { label: "Entegrasyonlar", href: "/entegrasyonlar" },
       { label: "API Dokümantasyonu", href: "/api-docs" },
