@@ -4,6 +4,19 @@ import bcryptjs from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
+  // ─── Smart Seed Strategy ────────────────────────────────
+  // Skip mock tenders if real data exists (feature flag migration)
+  const existingTenders = await prisma.tender.count({
+    where: { source: { not: "MOCK" } },
+  });
+
+  const skipMockTenders = existingTenders > 0;
+
+  if (skipMockTenders) {
+    console.log(`✅ ${existingTenders} gerçek ihale mevcut — mock ihale seed atlanıyor`);
+    console.log("   (Firmalar ve kullanıcılar yine de oluşturulacak)\n");
+  }
+
   console.log("Seed verileri oluşturuluyor...");
 
   // ─── Firmalar ───
@@ -91,6 +104,13 @@ async function main() {
     },
   });
 
+  // ─── İhale Verileri (skip if real data exists) ───
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tenders: any[] = [];
+
+  if (skipMockTenders) {
+    console.log("  Mock ihale oluşturma atlandı (gerçek veri mevcut)");
+  } else {
   // ─── İhale Verileri ───
   const cities = ["İstanbul", "Ankara", "İzmir", "Bursa", "Antalya", "Gaziantep", "Konya", "Adana", "Kayseri", "Trabzon", "Eskişehir", "Samsun", "Diyarbakır", "Mersin", "Denizli"];
   const types: ("YAPIM" | "MAL_ALIMI" | "HIZMET" | "DANISMANLIK")[] = ["YAPIM", "MAL_ALIMI", "HIZMET", "DANISMANLIK"];
@@ -169,7 +189,6 @@ async function main() {
 
   const now = new Date();
 
-  const tenders = [];
   for (let i = 0; i < 50; i++) {
     const item = tenderTitles[i];
     const city = cities[i % cities.length];
@@ -253,6 +272,8 @@ async function main() {
     }
   }
 
+  } // end if (!skipMockTenders)
+
   // ─── İhale Sonuçları (10 ihale) ───
   const resultCompanies = [
     { name: "Anadolu İnşaat A.Ş.", taxNo: "1234567890" },
@@ -281,8 +302,11 @@ async function main() {
     });
   }
 
-  // ─── Favoriler ───
-  for (let i = 0; i < 5; i++) {
+  // ─── Favoriler (skip if no mock tenders) ───
+  if (tenders.length === 0) {
+    console.log("  Favoriler/Başvurular/Bildirimler atlandı (mock ihale yok)");
+  }
+  for (let i = 0; i < Math.min(5, tenders.length); i++) {
     await prisma.favorite.create({
       data: {
         userId: admin.id,
@@ -290,7 +314,7 @@ async function main() {
       },
     });
   }
-  for (let i = 2; i < 6; i++) {
+  for (let i = 2; i < Math.min(6, tenders.length); i++) {
     await prisma.favorite.create({
       data: {
         userId: premiumUser.id,
@@ -301,7 +325,7 @@ async function main() {
 
   // ─── Başvurular ───
   const appStatuses: ("TASLAK" | "GONDERILDI" | "DEGERLENDIRMEDE" | "KABUL_EDILDI" | "REDDEDILDI")[] = ["TASLAK", "GONDERILDI", "DEGERLENDIRMEDE", "KABUL_EDILDI", "REDDEDILDI"];
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < Math.min(5, Math.floor(tenders.length / 3)); i++) {
     const tender = tenders[i * 3];
     const cost = Number(tender.estimatedCost) || 1000000;
     await prisma.application.create({
@@ -368,7 +392,7 @@ async function main() {
 
   // ─── Bildirimler ───
   const notifTypes: ("YENI_IHALE" | "SON_BASVURU" | "ZEYILNAME" | "SONUC" | "SISTEM")[] = ["YENI_IHALE", "SON_BASVURU", "ZEYILNAME", "SONUC", "SISTEM"];
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < (tenders.length > 0 ? 15 : 0); i++) {
     const tender = tenders[i % tenders.length];
     await prisma.notification.create({
       data: {
