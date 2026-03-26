@@ -1,8 +1,9 @@
-// ─── External Data Provider Types ───────────────────────────
+// ─── Provider Interfaces ──────────────────────────────────────
 
 export interface HealthCheckResult {
   ok: boolean;
   latencyMs: number;
+  message?: string;
 }
 
 export interface DataProvider<T> {
@@ -11,54 +12,120 @@ export interface DataProvider<T> {
   healthCheck(): Promise<HealthCheckResult>;
 }
 
-/** Default provider configurations (rate limits from real API constraints) */
-export const PROVIDER_DEFAULTS = {
-  EKAP: { rateLimitMs: 1500, maxTokens: 3, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
-  TED: { rateLimitMs: 500, maxTokens: 5, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
-  TUIK: { rateLimitMs: 2000, maxTokens: 2, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
-  MERSIS: { rateLimitMs: 1000, maxTokens: 3, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
-  IYZICO: { rateLimitMs: 200, maxTokens: 10, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
-  NETGSM: { rateLimitMs: 1000, maxTokens: 5, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
-  MEVZUAT: { rateLimitMs: 2000, maxTokens: 2, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
-  RESMI_GAZETE: { rateLimitMs: 2000, maxTokens: 2, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
-} as const;
-
 export interface CacheConfig {
-  /** Time-to-live in seconds */
-  ttl: number;
-  /** Serve stale data while revalidating in the background */
-  staleWhileRevalidate: boolean;
-  /** Cache key prefix or identifier */
-  key: string;
+  ttlSeconds?: number;
+  /** Alias for ttlSeconds (backward compat) */
+  ttl?: number;
+  staleWhileRevalidate?: boolean;
+  prefix?: string;
+  key?: string;
 }
 
 export interface ProviderConfig {
-  /** Unique name of the provider */
   name: string;
-  /** Base URL for the external API */
   baseUrl: string;
-  /** Rate limit: minimum milliseconds between requests */
   rateLimitMs: number;
-  /** Maximum tokens in the rate-limiter bucket */
-  maxTokens: number;
-  /** Default cache configuration */
-  cache: CacheConfig;
-  /** Maximum retry attempts on failure */
+  cacheTtlSeconds?: number;
   maxRetries: number;
-  /** Base delay in ms for exponential backoff */
-  baseDelayMs: number;
-  /** Circuit breaker failure threshold before opening */
-  circuitBreakerThreshold: number;
-  /** Circuit breaker reset timeout in ms */
-  circuitBreakerResetMs: number;
+  maxTokens?: number;
+  baseDelayMs?: number;
+  circuitBreakerThreshold?: number;
+  circuitBreakerResetMs?: number;
+  cache?: CacheConfig;
 }
+
+export const PROVIDER_DEFAULTS = {
+  EKAP: {
+    rateLimitMs: 1500,
+    maxTokens: 1,
+    cacheTtlSeconds: 3600,
+    maxRetries: 2,
+    baseDelayMs: 1000,
+    circuitBreakerThreshold: 5,
+    circuitBreakerResetMs: 60000,
+  },
+  TED: {
+    rateLimitMs: 500,
+    maxTokens: 2,
+    cacheTtlSeconds: 86400,
+    maxRetries: 2,
+    baseDelayMs: 500,
+    circuitBreakerThreshold: 5,
+    circuitBreakerResetMs: 60000,
+  },
+  TUIK: {
+    rateLimitMs: 2000,
+    maxTokens: 1,
+    cacheTtlSeconds: 86400,
+    maxRetries: 2,
+    baseDelayMs: 1000,
+    circuitBreakerThreshold: 3,
+    circuitBreakerResetMs: 120000,
+  },
+  MEVZUAT: {
+    rateLimitMs: 2000,
+    maxTokens: 1,
+    cacheTtlSeconds: 86400,
+    maxRetries: 1,
+    baseDelayMs: 1000,
+    circuitBreakerThreshold: 3,
+    circuitBreakerResetMs: 120000,
+  },
+  MERSIS: {
+    rateLimitMs: 3000,
+    maxTokens: 1,
+    cacheTtlSeconds: 604800,
+    maxRetries: 1,
+    baseDelayMs: 2000,
+    circuitBreakerThreshold: 3,
+    circuitBreakerResetMs: 300000,
+  },
+  KAP: {
+    rateLimitMs: 2000,
+    maxTokens: 1,
+    cacheTtlSeconds: 86400,
+    maxRetries: 2,
+    baseDelayMs: 1000,
+    circuitBreakerThreshold: 5,
+    circuitBreakerResetMs: 60000,
+  },
+  TOBB: {
+    rateLimitMs: 1500,
+    maxTokens: 1,
+    cacheTtlSeconds: 86400,
+    maxRetries: 2,
+    baseDelayMs: 1000,
+    circuitBreakerThreshold: 3,
+    circuitBreakerResetMs: 120000,
+  },
+} as const;
 
 export interface SyncResult {
   provider: string;
-  operation: string;
-  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
-  recordCount: number;
+  status: "COMPLETED" | "FAILED";
+  operation?: string;
+  recordsProcessed?: number;
+  recordsCreated?: number;
+  recordsUpdated?: number;
+  recordCount?: number;
+  errors?: string[];
   errorMessage?: string;
-  startedAt: Date;
+  durationMs?: number;
+  startedAt?: Date;
   completedAt?: Date;
+}
+
+export interface SyncLogResult {
+  status: "COMPLETED" | "FAILED";
+  recordCount: number;
+  durationMs: number;
+  error?: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
 }

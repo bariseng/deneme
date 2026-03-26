@@ -196,7 +196,8 @@ describe("recordConsent", () => {
   it("records KVKK consent", async () => {
     await recordConsent("user-1", "aydinlatma_metni", true, "1.2.3.4");
     expect(mockPrisma.cachedData.upsert).toHaveBeenCalledTimes(1);
-    const call = mockPrisma.cachedData.upsert.mock.calls[0][0];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const call = (mockPrisma.cachedData.upsert.mock.calls as any)[0][0];
     expect(call.where.key).toBe("consent:user-1:aydinlatma_metni");
   });
 

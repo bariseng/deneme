@@ -82,10 +82,11 @@ export async function calculateMultiSourceScore(
   // 4. KAP finansal rasyoları (halka açıksa)
   if (company.externalKapId) {
     try {
-      const financials = await kapProvider.getFinancials(company.externalKapId);
+      const kap = kapProvider as unknown as { getFinancials(id: string): Promise<{ currentRatio: number; debtToEquity: number; netProfitMargin: number; returnOnEquity: number }[]>; calculateRatios(f: unknown): { currentRatio: number; debtToEquity: number; netProfitMargin: number; returnOnEquity: number } };
+      const financials = await kap.getFinancials(company.externalKapId);
       if (financials.length > 0) {
         const latest = financials[0];
-        const ratios = kapProvider.calculateRatios(latest);
+        const ratios = kap.calculateRatios(latest);
         let ratioScore = 0;
         if (ratios.currentRatio >= 1.5) ratioScore += 30;
         else if (ratios.currentRatio >= 1.0) ratioScore += 20;

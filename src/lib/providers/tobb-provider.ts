@@ -58,9 +58,9 @@ export class TobbProvider {
 
   constructor(config: ProviderConfig = TOBB_CONFIG) {
     this.config = config;
-    this.rateLimiter = new RateLimiter({ maxTokens: config.maxTokens, refillIntervalMs: config.rateLimitMs, tokensPerInterval: 1 });
+    this.rateLimiter = new RateLimiter({ maxTokens: config.maxTokens ?? 1, refillIntervalMs: config.rateLimitMs, tokensPerInterval: 1 });
     this.cache = new ProviderCache();
-    this.circuitBreaker = new CircuitBreaker({ failureThreshold: config.circuitBreakerThreshold, resetTimeoutMs: config.circuitBreakerResetMs, cache: this.cache });
+    this.circuitBreaker = new CircuitBreaker({ failureThreshold: config.circuitBreakerThreshold ?? 5, resetTimeoutMs: config.circuitBreakerResetMs ?? 60000, cache: this.cache });
   }
 
   /** Fetch latest commodity prices — live scrape with DB fallback. */
@@ -70,7 +70,7 @@ export class TobbProvider {
     if (cached) return cached;
     try {
       await this.rateLimiter.acquire();
-      const live = await this.circuitBreaker.execute(() => withRetry(() => this.scrape(params), { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs }));
+      const live = await this.circuitBreaker.execute(() => withRetry(() => this.scrape(params), { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs ?? 1000 }));
       if (live.length > 0) { await this.cache.set(cacheKey, live, this.config.cache, this.config.name); return live; }
     } catch (err) { console.warn(`[TOBB] Live fetch failed: ${err instanceof Error ? err.message : String(err)}`); }
     return this.queryDb(params);
@@ -88,7 +88,7 @@ export class TobbProvider {
     let data: CommodityData[];
     try {
       await this.rateLimiter.acquire();
-      data = await this.circuitBreaker.execute(() => withRetry(() => this.scrape(), { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs }));
+      data = await this.circuitBreaker.execute(() => withRetry(() => this.scrape(), { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs ?? 1000 }));
     } catch (err) { console.error(`[TOBB] Sync failed: ${err instanceof Error ? err.message : String(err)}`); return 0; }
     let count = 0;
     for (const item of data) {
@@ -100,7 +100,7 @@ export class TobbProvider {
         }); count++;
       } catch (err) { console.error(`[TOBB] Upsert ${item.code}: ${err instanceof Error ? err.message : String(err)}`); }
     }
-    await this.cache.invalidateByProvider(this.config.name);
+    await this.cache.invalidateAll();
     return count;
   }
 

@@ -1,113 +1,61 @@
-// ─── Token Bucket Rate Limiter ──────────────────────────────
+// ─── Token Bucket Rate Limiter ────────────────────────────────
+// Serverless-safe: per-instance rate limiting (not distributed)
+
+interface BucketState {
+  lastRequestTime: number;
+  tokens: number;
+}
+
+const buckets = new Map<string, BucketState>();
 
 interface RateLimiterConfig {
-  /** Maximum tokens in the bucket */
   maxTokens: number;
-  /** Refill interval in milliseconds */
   refillIntervalMs: number;
-  /** Tokens added per refill interval */
-  tokensPerInterval: number;
+  tokensPerInterval?: number;
 }
-
-interface RateLimiterStatus {
-  availableTokens: number;
-  maxTokens: number;
-  queueLength: number;
-}
-
-type QueueItem = {
-  resolve: () => void;
-};
 
 export class RateLimiter {
-  private tokens: number;
   private readonly maxTokens: number;
-  private readonly refillIntervalMs: number;
-  private readonly tokensPerInterval: number;
-  private lastRefillTime: number;
-  private queue: QueueItem[] = [];
-  private drainTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly refillRateMs: number;
+  private readonly name: string;
 
-  constructor(config: RateLimiterConfig) {
-    this.maxTokens = config.maxTokens;
-    this.tokens = config.maxTokens;
-    this.refillIntervalMs = config.refillIntervalMs;
-    this.tokensPerInterval = config.tokensPerInterval;
-    this.lastRefillTime = Date.now();
-  }
-
-  private refill(): void {
-    const now = Date.now();
-    const elapsed = now - this.lastRefillTime;
-    const intervals = Math.floor(elapsed / this.refillIntervalMs);
-    if (intervals > 0) {
-      this.tokens = Math.min(
-        this.maxTokens,
-        this.tokens + intervals * this.tokensPerInterval,
-      );
-      this.lastRefillTime = now;
+  constructor(nameOrConfig: string | RateLimiterConfig, intervalMs?: number, burst?: number) {
+    if (typeof nameOrConfig === "object") {
+      this.name = `limiter_${Date.now()}`;
+      this.maxTokens = nameOrConfig.maxTokens;
+      this.refillRateMs = nameOrConfig.refillIntervalMs;
+    } else {
+      this.name = nameOrConfig;
+      this.maxTokens = burst ?? 1;
+      this.refillRateMs = intervalMs ?? 1000;
     }
   }
 
-  /**
-   * Acquire a token, waiting if necessary until one is available.
-   */
   async acquire(): Promise<void> {
-    this.refill();
+    const now = Date.now();
+    const bucket = buckets.get(this.name) ?? { lastRequestTime: 0, tokens: this.maxTokens };
 
-    if (this.tokens >= 1) {
-      this.tokens -= 1;
-      return;
+    const elapsed = now - bucket.lastRequestTime;
+    const refilled = Math.floor(elapsed / this.refillRateMs);
+    bucket.tokens = Math.min(this.maxTokens, bucket.tokens + refilled);
+
+    if (bucket.tokens <= 0) {
+      const waitMs = this.refillRateMs - (elapsed % this.refillRateMs);
+      await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+      bucket.tokens = 1;
     }
 
-    // Queue the request and wait
-    return new Promise<void>((resolve) => {
-      this.queue.push({ resolve });
-      this.scheduleDrain();
-    });
-  }
-
-  /**
-   * Try to acquire a token immediately.
-   * Returns true if a token was acquired, false otherwise.
-   */
-  tryAcquire(): boolean {
-    this.refill();
-    if (this.tokens >= 1) {
-      this.tokens -= 1;
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Get the current status of the rate limiter.
-   */
-  getStatus(): RateLimiterStatus {
-    this.refill();
-    return {
-      availableTokens: this.tokens,
-      maxTokens: this.maxTokens,
-      queueLength: this.queue.length,
-    };
-  }
-
-  private scheduleDrain(): void {
-    if (this.drainTimer !== null) return;
-
-    this.drainTimer = setTimeout(() => {
-      this.drainTimer = null;
-      this.refill();
-
-      while (this.queue.length > 0 && this.tokens >= 1) {
-        this.tokens -= 1;
-        const item = this.queue.shift()!;
-        item.resolve();
-      }
-
-      if (this.queue.length > 0) {
-        this.scheduleDrain();
-      }
-    }, this.refillIntervalMs);
+    bucket.tokens--;
+    bucket.lastRequestTime = Date.now();
+    buckets.set(this.name, bucket);
   }
 }
+
+// Pre-configured limiters
+export const ekapLimiter = new RateLimiter("ekap", 1500);
+export const tedLimiter = new RateLimiter("ted", 500, 2);
+export const tuikLimiter = new RateLimiter("tuik", 2000);
+export const mevzuatLimiter = new RateLimiter("mevzuat", 2000);
+export const mersisLimiter = new RateLimiter("mersis", 3000);
+export const kapLimiter = new RateLimiter("kap", 2000);
+export const tobbLimiter = new RateLimiter("tobb", 1500);

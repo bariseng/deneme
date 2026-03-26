@@ -1,161 +1,201 @@
-// ─── VKN (Vergi Kimlik Numarası) Validation Provider ────────
-
-import { RateLimiter } from "./rate-limiter";
 import { ProviderCache } from "./cache";
-import { CircuitBreaker, withRetry } from "./error-handler";
-import type { ProviderConfig, HealthCheckResult } from "./types";
 
-// ─── Types ──────────────────────────────────────────────────
+// --- Interfaces ---
 
-export interface VknResult {
-  valid: boolean;
-  companyName?: string;
-  taxOffice?: string;
-  status?: string;
+export interface VknVerifyResult {
+  readonly valid: boolean;
+  readonly companyName?: string;
+  readonly taxOffice?: string;
+  readonly status?: string;
 }
 
-interface GibApiResponse {
-  tpiTcknVknSorgulaDto?: {
-    unvan?: string;
-    vergidairesikodu?: string;
-    durum?: string;
-  };
-}
+// --- Constants ---
 
-// ─── VKN Checksum Algorithm ─────────────────────────────────
+const GIB_URL = "https://ivd.gib.gov.tr/tvd_server/asyn-inquiry";
+const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const RATE_LIMIT_MS = 2000;
 
-/**
- * Validates a Turkish tax ID (VKN) using the official checksum algorithm.
- * The VKN is 10 digits where the 10th digit is the check digit.
- */
-export function validateVknChecksum(vkn: string): boolean {
-  if (!/^\d{10}$/.test(vkn)) return false;
-
-  const digits = vkn.split("").map(Number);
-
-  let sum = 0;
-  for (let i = 0; i < 9; i++) {
-    const tmp = (digits[i] + (9 - i)) % 10;
-    const powered = Math.pow(2, 9 - i) * tmp;
-    const mod9 = powered % 9;
-    // When powered > 0 and mod9 === 0, the contribution is 9; otherwise mod9
-    sum += powered > 0 && mod9 === 0 ? 9 : mod9;
-  }
-
-  const checkDigit = (10 - (sum % 10)) % 10;
-  return checkDigit === digits[9];
-}
-
-// ─── Provider Configuration ─────────────────────────────────
-
-const VKN_CONFIG: ProviderConfig = {
-  name: "VKN",
-  baseUrl: "https://ivd.gib.gov.tr",
-  rateLimitMs: 1000,
-  maxTokens: 3,
-  cache: { ttl: 86400, staleWhileRevalidate: true, key: "vkn" },
-  maxRetries: 2,
-  baseDelayMs: 500,
-  circuitBreakerThreshold: 5,
-  circuitBreakerResetMs: 60_000,
+const DEFAULT_HEADERS: Readonly<Record<string, string>> = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Content-Type": "application/x-www-form-urlencoded",
+  Accept: "text/html",
 };
 
-// ─── Provider Class ─────────────────────────────────────────
+// --- Checksum algorithm ---
+
+function computeVknChecksum(digits: readonly number[]): number {
+  let sum = 0;
+
+  for (let i = 0; i < 9; i++) {
+    const digit = digits[i]!;
+    const offset = 9 - i;
+    const tmp = (digit + offset) % 10;
+    const power = Math.pow(2, offset);
+    const modResult = (tmp * power) % 9;
+    sum += modResult === 0 ? 9 : modResult;
+  }
+
+  return (10 - (sum % 10)) % 10;
+}
+
+function isValidVknFormat(vkn: string): boolean {
+  return /^\d{10}$/.test(vkn);
+}
+
+// --- HTML parsing for GIB response ---
+
+function extractGibField(html: string, label: string): string {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(
+      `${escapedLabel}[^<]*</(?:td|th|label|span)>\s*<(?:td|span|div)[^>]*>([^<]+)<`,
+      "i"
+    ),
+    new RegExp(`${escapedLabel}[\s\S]*?<[^>]+>([^<]+)<`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return "";
+}
+
+function parseGibResponse(html: string): {
+  found: boolean;
+  companyName: string;
+  taxOffice: string;
+  status: string;
+} {
+  const companyName =
+    extractGibField(html, "Unvan") ||
+    extractGibField(html, "Adı Soyadı") ||
+    extractGibField(html, "Mükellef");
+
+  const taxOffice =
+    extractGibField(html, "Vergi Dairesi") ||
+    extractGibField(html, "VD");
+
+  const status =
+    extractGibField(html, "Durum") ||
+    extractGibField(html, "Mükellefiyet");
+
+  const found = companyName.length > 0;
+
+  return { found, companyName, taxOffice, status };
+}
+
+// --- Rate limiter (simple, internal) ---
+
+let lastRequestTime = 0;
+
+async function acquireRateLimit(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastRequestTime;
+
+  if (elapsed < RATE_LIMIT_MS) {
+    const waitMs = RATE_LIMIT_MS - elapsed;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, waitMs);
+    });
+  }
+
+  lastRequestTime = Date.now();
+}
+
+// --- Provider class ---
 
 class VknProvider {
-  private readonly rateLimiter: RateLimiter;
   private readonly cache: ProviderCache;
-  private readonly circuitBreaker: CircuitBreaker;
-  private readonly config: ProviderConfig;
 
   constructor() {
-    this.config = VKN_CONFIG;
-    this.rateLimiter = new RateLimiter({
-      maxTokens: this.config.maxTokens,
-      refillIntervalMs: this.config.rateLimitMs,
-      tokensPerInterval: 1,
-    });
-    this.cache = new ProviderCache();
-    this.circuitBreaker = new CircuitBreaker({
-      failureThreshold: this.config.circuitBreakerThreshold,
-      resetTimeoutMs: this.config.circuitBreakerResetMs,
-      cache: this.cache,
-    });
+    this.cache = new ProviderCache("vkn", CACHE_TTL_MS);
   }
 
-  /**
-   * Verify a VKN online: first validates the checksum, then queries GİB.
-   */
-  async verifyVkn(vkn: string): Promise<VknResult> {
-    if (!validateVknChecksum(vkn)) {
-      return { valid: false, status: "INVALID_CHECKSUM" };
+  validateChecksum(vkn: string): boolean {
+    const trimmed = vkn.trim();
+
+    if (!isValidVknFormat(trimmed)) {
+      return false;
     }
 
-    const cacheKey = `vkn:verify:${vkn}`;
-    const cached = await this.cache.get<VknResult>(cacheKey);
-    if (cached) return cached;
+    const digits = trimmed.split("").map(Number);
+    const expectedCheck = computeVknChecksum(digits);
 
-    await this.rateLimiter.acquire();
-
-    const result = await this.circuitBreaker.execute(() =>
-      withRetry(() => this.fetchVknData(vkn), {
-        maxRetries: this.config.maxRetries,
-        baseDelayMs: this.config.baseDelayMs,
-      }),
-    );
-
-    await this.cache.set(cacheKey, result, this.config.cache, this.config.name);
-    return result;
+    return expectedCheck === digits[9];
   }
 
-  private async fetchVknData(vkn: string): Promise<VknResult> {
-    const response = await fetch(
-      `${this.config.baseUrl}/tvd_server/asempService`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vkn }),
-        signal: AbortSignal.timeout(10_000),
-      },
-    );
+  async verifyOnline(vkn: string): Promise<VknVerifyResult> {
+    const trimmed = vkn.trim();
 
-    if (!response.ok) {
-      throw new Error(`GİB API returned status ${response.status}`);
+    if (!isValidVknFormat(trimmed)) {
+      return { valid: false };
     }
 
-    const data: unknown = await response.json();
-    const typed = data as GibApiResponse;
-    const dto = typed.tpiTcknVknSorgulaDto;
-
-    if (!dto) {
-      return { valid: false, status: "NOT_FOUND" };
+    // Client-side checksum first
+    if (!this.validateChecksum(trimmed)) {
+      return { valid: false };
     }
 
-    return {
-      valid: true,
-      companyName: dto.unvan,
-      taxOffice: dto.vergidairesikodu,
-      status: dto.durum ?? "ACTIVE",
-    };
-  }
+    const cacheKey = `verify:${trimmed}`;
+    const cached = await this.cache.get<VknVerifyResult>(cacheKey);
+    if (cached !== null && cached !== undefined) {
+      return cached;
+    }
 
-  async healthCheck(): Promise<HealthCheckResult> {
-    const start = Date.now();
     try {
-      const res = await fetch(this.config.baseUrl, {
-        method: "HEAD",
-        signal: AbortSignal.timeout(5_000),
+      await acquireRateLimit();
+
+      const response = await fetch(GIB_URL, {
+        method: "POST",
+        headers: DEFAULT_HEADERS,
+        body: new URLSearchParams({ vkn1: trimmed }).toString(),
       });
-      return { ok: res.ok, latencyMs: Date.now() - start };
+
+      if (!response.ok) {
+        // Online check failed — return checksum-only result
+        return this.buildChecksumOnlyResult(trimmed);
+      }
+
+      const html = await response.text();
+      const parsed = parseGibResponse(html);
+
+      if (!parsed.found) {
+        const result: VknVerifyResult = { valid: false };
+        this.cache.set(cacheKey, result);
+        return result;
+      }
+
+      const result: VknVerifyResult = {
+        valid: true,
+        companyName: parsed.companyName || undefined,
+        taxOffice: parsed.taxOffice || undefined,
+        status: parsed.status || undefined,
+      };
+
+      this.cache.set(cacheKey, result);
+      return result;
     } catch {
-      return { ok: false, latencyMs: Date.now() - start };
+      // Online check failed — return checksum-only result
+      return this.buildChecksumOnlyResult(trimmed);
     }
+  }
+
+  // --- Private helpers ---
+
+  private buildChecksumOnlyResult(vkn: string): VknVerifyResult {
+    const checksumValid = this.validateChecksum(vkn);
+    return {
+      valid: checksumValid,
+      status: checksumValid ? "checksum-only" : undefined,
+    };
   }
 }
 
-// ─── Singleton & Exports ────────────────────────────────────
+// --- Singleton export ---
 
-const vknProviderInstance = new VknProvider();
-
-export const vknProvider = vknProviderInstance;
-export const verifyVkn = (vkn: string) => vknProviderInstance.verifyVkn(vkn);
+export const vknProvider = new VknProvider();

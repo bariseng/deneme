@@ -24,7 +24,7 @@ export abstract class BaseProvider<T> implements DataProvider<T> {
     this.config = config;
 
     this.rateLimiter = new RateLimiter({
-      maxTokens: config.maxTokens,
+      maxTokens: config.maxTokens ?? 1,
       refillIntervalMs: config.rateLimitMs,
       tokensPerInterval: 1,
     });
@@ -32,8 +32,8 @@ export abstract class BaseProvider<T> implements DataProvider<T> {
     this.cache = new ProviderCache();
 
     this.circuitBreaker = new CircuitBreaker({
-      failureThreshold: config.circuitBreakerThreshold,
-      resetTimeoutMs: config.circuitBreakerResetMs,
+      failureThreshold: config.circuitBreakerThreshold ?? 5,
+      resetTimeoutMs: config.circuitBreakerResetMs ?? 60000,
       cache: this.cache,
     });
   }
@@ -69,7 +69,7 @@ export abstract class BaseProvider<T> implements DataProvider<T> {
     const result = await this.circuitBreaker.execute(() =>
       withRetry(() => this.doFetch(params), {
         maxRetries: this.config.maxRetries,
-        baseDelayMs: this.config.baseDelayMs,
+        baseDelayMs: this.config.baseDelayMs ?? 1000,
       }),
     );
 
@@ -90,7 +90,7 @@ export abstract class BaseProvider<T> implements DataProvider<T> {
     const result = await this.circuitBreaker.execute(() =>
       withRetry(() => this.doFetchById(id), {
         maxRetries: this.config.maxRetries,
-        baseDelayMs: this.config.baseDelayMs,
+        baseDelayMs: this.config.baseDelayMs ?? 1000,
       }),
     );
 
@@ -166,7 +166,7 @@ export abstract class BaseProvider<T> implements DataProvider<T> {
   // ── Helpers ─────────────────────────────────────────────────
 
   private get cacheConfig(): CacheConfig {
-    return this.config.cache;
+    return this.config.cache ?? { ttlSeconds: 300 };
   }
 
   private buildCacheKey(

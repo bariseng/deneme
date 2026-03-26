@@ -111,10 +111,11 @@ describe("getSectorDistribution", () => {
 describe("getCityHeatmap", () => {
   it("returns city data sorted by count", async () => {
     // Mock groupBy for cities
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockPrisma.tender.groupBy.mockResolvedValueOnce([
       { city: "İstanbul", _count: 100, _sum: { estimatedCost: 50000000 } },
       { city: "Ankara", _count: 80, _sum: { estimatedCost: 30000000 } },
-    ]);
+    ] as any);
 
     const cities = await getCityHeatmap();
     expect(Array.isArray(cities)).toBe(true);

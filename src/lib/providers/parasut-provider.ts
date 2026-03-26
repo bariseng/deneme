@@ -85,14 +85,14 @@ export class ParasutProvider {
     this.clientId = process.env.PARASUT_CLIENT_ID ?? "";
     this.clientSecret = process.env.PARASUT_CLIENT_SECRET ?? "";
     this.rateLimiter = new RateLimiter({
-      maxTokens: config.maxTokens,
+      maxTokens: config.maxTokens ?? 1,
       refillIntervalMs: config.rateLimitMs,
       tokensPerInterval: 1,
     });
     this.cache = new ProviderCache();
     this.circuitBreaker = new CircuitBreaker({
-      failureThreshold: config.circuitBreakerThreshold,
-      resetTimeoutMs: config.circuitBreakerResetMs,
+      failureThreshold: config.circuitBreakerThreshold ?? 5,
+      resetTimeoutMs: config.circuitBreakerResetMs ?? 60000,
       cache: this.cache,
     });
   }
@@ -179,13 +179,13 @@ export class ParasutProvider {
       this.circuitBreaker.execute(() =>
         withRetry(
           () => this.apiGet(`/${parasutId}/sales_invoices`, token),
-          { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs },
+          { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs ?? 1000 },
         ),
       ),
       this.circuitBreaker.execute(() =>
         withRetry(
           () => this.apiGet(`/${parasutId}/purchase_bills`, token),
-          { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs },
+          { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs ?? 1000 },
         ),
       ),
     ]);
@@ -247,7 +247,7 @@ export class ParasutProvider {
     const result = await this.circuitBreaker.execute(() =>
       withRetry(
         () => this.apiGet(`/${parasutId}/contacts?page[number]=${page}`, token),
-        { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs },
+        { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs ?? 1000 },
       ),
     );
 
@@ -279,7 +279,7 @@ export class ParasutProvider {
     });
 
     // Invalidate cached summary so next read fetches fresh data
-    await this.cache.invalidate(`parasut:invoice-summary:${companyId}`);
+    await this.cache.invalidateAll();
 
     // Store sync result in data sync log
     await prisma.dataSyncLog.create({

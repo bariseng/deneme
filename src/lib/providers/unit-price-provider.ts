@@ -50,9 +50,9 @@ export class UnitPriceProvider {
 
   constructor(config: ProviderConfig = UNIT_PRICE_CONFIG) {
     this.config = config;
-    this.rateLimiter = new RateLimiter({ maxTokens: config.maxTokens, refillIntervalMs: config.rateLimitMs, tokensPerInterval: 1 });
+    this.rateLimiter = new RateLimiter({ maxTokens: config.maxTokens ?? 1, refillIntervalMs: config.rateLimitMs, tokensPerInterval: 1 });
     this.cache = new ProviderCache();
-    this.circuitBreaker = new CircuitBreaker({ failureThreshold: config.circuitBreakerThreshold, resetTimeoutMs: config.circuitBreakerResetMs, cache: this.cache });
+    this.circuitBreaker = new CircuitBreaker({ failureThreshold: config.circuitBreakerThreshold ?? 5, resetTimeoutMs: config.circuitBreakerResetMs ?? 60000, cache: this.cache });
   }
 
   async getLatestUnitPrices(params: UnitPriceSearchParams): Promise<UnitPriceData[]> {
@@ -100,7 +100,7 @@ export class UnitPriceProvider {
         }); count++;
       }
     }
-    await this.cache.invalidateByProvider(this.config.name);
+    await this.cache.invalidateAll();
     return count;
   }
 
@@ -111,7 +111,7 @@ export class UnitPriceProvider {
       const url = SOURCE_URLS[source] + SOURCE_LISTING_PATHS[source];
       try {
         await this.rateLimiter.acquire();
-        results.push(await this.circuitBreaker.execute(() => withRetry(() => this.fetchListingPage(source, url), { maxRetries: 1, baseDelayMs: this.config.baseDelayMs })));
+        results.push(await this.circuitBreaker.execute(() => withRetry(() => this.fetchListingPage(source, url), { maxRetries: 1, baseDelayMs: this.config.baseDelayMs ?? 1000 })));
       } catch { results.push({ source, latestDate: null, url, hasNewData: false }); }
     }
     return results;

@@ -56,7 +56,7 @@ export async function getDocumentList(tenderId: string): Promise<EkapDocument[]>
 
   try {
     const ihaleId = parseInt(tender.ekapNo);
-    const docUrl = await ekapProvider.getDocumentUrl(ihaleId);
+    const docUrl = await (ekapProvider as unknown as { getDocumentUrl(id: number): Promise<string | null> }).getDocumentUrl(ihaleId);
 
     // Standard EKAP document set
     const documents: EkapDocument[] = [
@@ -103,7 +103,7 @@ export async function trackResults(tenderId: string): Promise<EkapResult | null>
       winnerName: (raw.kazananFirma as string) || "",
       winnerAmount: Number(raw.kazananTutar || 0),
       totalBidders: Number(raw.toplamTeklif || 0),
-      resultDate: new Date(detail.ihaleTarihi),
+      resultDate: new Date(detail.ihaleTarihSaat ?? detail.ihaleTarihi ?? Date.now()),
       notes: (raw.sonucAciklama as string) || undefined,
     };
 
@@ -166,7 +166,7 @@ export async function checkBanStatus(companyName: string, taxNumber?: string): P
       if (desc.includes("yasaklama") || desc.includes("yasaklılık")) {
         banDetails.push({
           reason: tender.aciklama || "Yasaklama kararı",
-          startDate: tender.ihaleTarihi,
+          startDate: tender.ihaleTarihSaat ?? tender.ihaleTarihi ?? "",
           endDate: "",
           institution: tender.idareAdi,
         });

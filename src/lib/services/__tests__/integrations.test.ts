@@ -58,6 +58,7 @@ describe("runEkapReminderBot", () => {
 
   it("sends opening reminders for tenders with upcoming opening dates", async () => {
     const soon = new Date(Date.now() + 12 * 3600_000); // 12 hours from now
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockPrisma.tender.findMany.mockResolvedValueOnce([
       {
         id: "t-1",
@@ -67,7 +68,7 @@ describe("runEkapReminderBot", () => {
         favorites: [{ userId: "u-1" }],
         bids: [{ userId: "u-2" }],
       },
-    ]);
+    ] as any);
 
     const result = await runEkapReminderBot();
     expect(result.openingReminders).toBe(2);
@@ -96,7 +97,8 @@ describe("getDocumentList", () => {
   });
 
   it("returns document list for valid EKAP tender", async () => {
-    mockPrisma.tender.findUnique.mockResolvedValueOnce({ ekapNo: "12345" });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockPrisma.tender.findUnique.mockResolvedValueOnce({ ekapNo: "12345" } as any);
     const docs = await getDocumentList("t-1");
     expect(docs.length).toBeGreaterThan(0);
     expect(docs[0]).toHaveProperty("name");

@@ -1,224 +1,238 @@
-// ─── TÜİK Veri Portalı Provider ─────────────────────────────
-// Macro price indices (construction cost, PPI, CPI) from data.tuik.gov.tr
+// ─── TÜİK Provider — Macro Price Indices via TCMB EVDS ─────
+// Construction cost, PPI (Yİ-ÜFE), CPI (TÜFE)
 
 import { prisma } from "@/lib/prisma";
-import type { HealthCheckResult, ProviderConfig } from "./types";
-import { PROVIDER_DEFAULTS } from "./types";
-import { RateLimiter } from "./rate-limiter";
+import { tuikLimiter } from "./rate-limiter";
 import { ProviderCache } from "./cache";
-import { CircuitBreaker, withRetry } from "./error-handler";
 
 // ─── Types ──────────────────────────────────────────────────
 
-export interface MacroIndex {
-  code: string;
-  name: string;
-  value: number;
+export interface MacroIndexEntry {
   period: string;
-  changeMonthly: number | null;
-  changeYearly: number | null;
+  value: number;
+  change: number;
+  yearOverYear: number;
 }
 
-interface TuikGrafikVeriItem {
-  deger: number;
-  donem: string;
-  aylikDegisim: number | null;
-  yillikDegisim: number | null;
-}
+// ─── EVDS Series Codes ──────────────────────────────────────
 
-// ─── Type Guards ────────────────────────────────────────────
-
-function isTuikGrafikVeriItem(val: unknown): val is TuikGrafikVeriItem {
-  if (typeof val !== "object" || val === null) return false;
-  const obj = val as Record<string, unknown>;
-  return typeof obj.deger === "number" && typeof obj.donem === "string";
-}
-
-// ─── Index Code Mapping ─────────────────────────────────────
-
-interface IndexDef {
+interface EvdsSeries {
   code: string;
   name: string;
-  indicatorId: number;
-  bultenKonuId: number;
+  indexName: string;
 }
 
-const INDEX_DEFS: IndexDef[] = [
-  { code: "INSAAT_MALIYET", name: "İnşaat Maliyet Endeksi", indicatorId: 1, bultenKonuId: 14 },
-  { code: "INSAAT_ISCILIK", name: "İnşaat İşçilik Endeksi", indicatorId: 2, bultenKonuId: 14 },
-  { code: "INSAAT_MALZEME", name: "İnşaat Malzeme Endeksi", indicatorId: 3, bultenKonuId: 14 },
-  { code: "YIUFE", name: "Yİ-ÜFE (Yurt İçi Üretici Fiyat Endeksi)", indicatorId: 4, bultenKonuId: 10 },
-  { code: "TUFE", name: "TÜFE (Tüketici Fiyat Endeksi)", indicatorId: 5, bultenKonuId: 9 },
-];
-
-const BASE_YEAR = 2015;
-
-const MONTH_MAP: Record<string, string> = {
-  ocak: "01", şubat: "02", mart: "03", nisan: "04",
-  mayıs: "05", haziran: "06", temmuz: "07", ağustos: "08",
-  eylül: "09", ekim: "10", kasım: "11", aralık: "12",
+const CONSTRUCTION_SERIES: EvdsSeries = {
+  code: "TP.FG.J0",  // İnşaat ayrı seri yok, ÜFE'yi kullan (inşaat alt kalemi)
+  name: "İnşaat Maliyet Endeksi (ÜFE proxy)",
+  indexName: "İnşaat Maliyet",
 };
 
-// ─── Request Headers ────────────────────────────────────────
-
-const TUIK_HEADERS: Record<string, string> = {
-  Accept: "application/json",
-  "Content-Type": "application/json",
-  Origin: "https://data.tuik.gov.tr",
-  Referer: "https://data.tuik.gov.tr/",
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+const PPI_SERIES: EvdsSeries = {
+  code: "TP.FG.J0",
+  name: "Yİ-ÜFE (Yurt İçi Üretici Fiyat Endeksi)",
+  indexName: "Yİ-ÜFE",
 };
 
-// ─── Provider Config ────────────────────────────────────────
-
-const TUIK_CONFIG: ProviderConfig = {
-  name: "TUIK",
-  baseUrl: "https://data.tuik.gov.tr",
-  rateLimitMs: PROVIDER_DEFAULTS.TUIK.rateLimitMs,
-  maxTokens: PROVIDER_DEFAULTS.TUIK.maxTokens,
-  cache: { ttl: 86400, staleWhileRevalidate: true, key: "tuik" },
-  maxRetries: 3,
-  baseDelayMs: 1500,
-  circuitBreakerThreshold: PROVIDER_DEFAULTS.TUIK.circuitBreakerThreshold,
-  circuitBreakerResetMs: PROVIDER_DEFAULTS.TUIK.circuitBreakerResetMs,
+const CPI_SERIES: EvdsSeries = {
+  code: "TP.TUFE1YI.T1",
+  name: "TÜFE (Tüketici Fiyat Endeksi)",
+  indexName: "TÜFE",
 };
+
+// ─── EVDS Response Shape ────────────────────────────────────
+
+interface EvdsItem {
+  Tarih?: string;
+  [key: string]: string | number | undefined;
+}
+
+interface EvdsResponse {
+  items?: EvdsItem[];
+  totalCount?: number;
+}
+
+// ─── Config ─────────────────────────────────────────────────
+
+const EVDS_BASE_URL = process.env.TCMB_EVDS_URL || "https://evds3.tcmb.gov.tr/igmevdsms-dis";
+const CACHE_TTL_SECONDS = 86400; // 24 hours
+
+function getEvdsApiKey(): string | null {
+  return process.env.TCMB_EVDS_KEY ?? null;
+}
+
+// ─── Date Helpers ───────────────────────────────────────────
+
+function formatEvdsDate(date: Date): string {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+function getDefaultDateRange(): { startDate: string; endDate: string } {
+  const end = new Date();
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - 2);
+  return {
+    startDate: formatEvdsDate(start),
+    endDate: formatEvdsDate(end),
+  };
+}
+
+/**
+ * Parse EVDS date string to YYYY-MM period format.
+ * EVDS3 uses "YYYY-M" for monthly data (e.g., "2025-1") or "dd-MM-yyyy" for daily.
+ */
+function toPeriod(dateStr: string): string | null {
+  // Monthly format: "2025-1", "2025-12"
+  const monthlyMatch = dateStr.match(/^(\d{4})-(\d{1,2})$/);
+  if (monthlyMatch) {
+    const [, yyyy, m] = monthlyMatch;
+    return `${yyyy}-${m.padStart(2, "0")}`;
+  }
+  // Daily format: "dd-MM-yyyy"
+  const parts = dateStr.split("-");
+  if (parts.length < 3) return null;
+  const [dd, mm, yyyy] = parts;
+  if (!yyyy || !mm || !dd) return null;
+  return `${yyyy}-${mm}`;
+}
+
+// ─── EVDS Item Parser ───────────────────────────────────────
+
+function parseEvdsItems(
+  items: EvdsItem[],
+  seriesCode: string,
+): MacroIndexEntry[] {
+  const entries: MacroIndexEntry[] = [];
+  let previousValue: number | null = null;
+  const yearMap = new Map<string, number>();
+
+  for (const item of items) {
+    const dateStr = item.Tarih;
+    if (!dateStr || typeof dateStr !== "string") continue;
+
+    const period = toPeriod(dateStr);
+    if (!period) continue;
+
+    // EVDS3 returns keys with underscores instead of dots (TP.FG.J0 → TP_FG_J0)
+    const underscoreKey = seriesCode.replace(/\./g, "_");
+    const rawValue = item[underscoreKey] ?? item[seriesCode];
+    if (rawValue === undefined || rawValue === null) continue;
+
+    const value =
+      typeof rawValue === "number" ? rawValue : parseFloat(String(rawValue));
+    if (isNaN(value)) continue;
+
+    const change =
+      previousValue !== null && previousValue !== 0
+        ? ((value - previousValue) / previousValue) * 100
+        : 0;
+
+    const yearKey = period.slice(0, 4);
+    const monthKey = period.slice(5, 7);
+
+    // Compute year-over-year from prior year same month
+    const prevYearKey = String(Number(yearKey) - 1);
+    const prevYearPeriod = `${prevYearKey}-${monthKey}`;
+    const prevYearValue = yearMap.get(prevYearPeriod) ?? null;
+
+    const yearOverYear =
+      prevYearValue !== null && prevYearValue !== 0
+        ? ((value - prevYearValue) / prevYearValue) * 100
+        : 0;
+
+    entries.push({
+      period,
+      value: Math.round(value * 100) / 100,
+      change: Math.round(change * 100) / 100,
+      yearOverYear: Math.round(yearOverYear * 100) / 100,
+    });
+
+    yearMap.set(period, value);
+    previousValue = value;
+  }
+
+  return entries;
+}
 
 // ─── TÜİK Provider Class ───────────────────────────────────
 
-export class TuikProvider {
-  private readonly config: ProviderConfig;
-  private readonly rateLimiter: RateLimiter;
+class TuikProvider {
   private readonly cache: ProviderCache;
-  private readonly circuitBreaker: CircuitBreaker;
 
-  constructor(config: ProviderConfig = TUIK_CONFIG) {
-    this.config = config;
-    this.rateLimiter = new RateLimiter({
-      maxTokens: config.maxTokens,
-      refillIntervalMs: config.rateLimitMs,
-      tokensPerInterval: 1,
-    });
-    this.cache = new ProviderCache();
-    this.circuitBreaker = new CircuitBreaker({
-      failureThreshold: config.circuitBreakerThreshold,
-      resetTimeoutMs: config.circuitBreakerResetMs,
-      cache: this.cache,
-    });
+  constructor() {
+    this.cache = new ProviderCache("tuik", CACHE_TTL_SECONDS);
   }
 
-  // ── Public Fetch Methods ──────────────────────────────────
+  // ── Public Fetch Methods ──────────────────────────────
 
-  /** Fetch latest construction cost indices (maliyet, işçilik, malzeme). */
-  async fetchConstructionCostIndex(): Promise<MacroIndex[]> {
-    return this.fetchCached("tuik:construction_cost", (d) =>
-      d.code.startsWith("INSAAT_"),
-    );
+  async fetchConstructionCostIndex(): Promise<MacroIndexEntry[]> {
+    return (await this.cache.get<MacroIndexEntry[]>(
+      "construction_cost",
+      () => this.fetchSeries(CONSTRUCTION_SERIES),
+    )) ?? [];
   }
 
-  /** Fetch Yİ-ÜFE (domestic PPI) data. */
-  async fetchPPIIndex(): Promise<MacroIndex[]> {
-    return this.fetchCached("tuik:ppi", (d) => d.code === "YIUFE");
+  async fetchPPIIndex(): Promise<MacroIndexEntry[]> {
+    return (await this.cache.get<MacroIndexEntry[]>(
+      "ppi",
+      () => this.fetchSeries(PPI_SERIES),
+    )) ?? [];
   }
 
-  /** Fetch TÜFE (CPI) data. */
-  async fetchCPIIndex(): Promise<MacroIndex[]> {
-    return this.fetchCached("tuik:cpi", (d) => d.code === "TUFE");
+  async fetchCPIIndex(): Promise<MacroIndexEntry[]> {
+    return (await this.cache.get<MacroIndexEntry[]>(
+      "cpi",
+      () => this.fetchSeries(CPI_SERIES),
+    )) ?? [];
   }
 
-  /**
-   * Fetch all indices and upsert to MacroPriceIndex table.
-   * Returns the total number of records upserted.
-   */
+  // ── Sync to Database ──────────────────────────────────
+
   async syncMacroIndices(): Promise<number> {
-    const allIndices: MacroIndex[] = [];
+    const allSeries = [CONSTRUCTION_SERIES, PPI_SERIES, CPI_SERIES];
+    let totalSynced = 0;
 
-    for (const def of INDEX_DEFS) {
+    for (const series of allSeries) {
       try {
-        const items = await this.fetchIndicator(def);
-        allIndices.push(...items);
+        const entries = await this.fetchSeries(series);
+        const count = await this.upsertEntries(entries, series.indexName);
+        totalSynced += count;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[TÜİK] Failed to fetch ${def.code}: ${msg}`);
+        console.error(`[TÜİK] Failed to sync ${series.code}: ${msg}`);
       }
     }
 
-    let upsertCount = 0;
-    for (const idx of allIndices) {
-      try {
-        await prisma.macroPriceIndex.upsert({
-          where: { code_period: { code: idx.code, period: idx.period } },
-          update: {
-            name: idx.name,
-            value: idx.value,
-            baseYear: BASE_YEAR,
-            changeMonthly: idx.changeMonthly,
-            changeYearly: idx.changeYearly,
-            source: "TUIK",
-          },
-          create: {
-            code: idx.code,
-            name: idx.name,
-            value: idx.value,
-            baseYear: BASE_YEAR,
-            period: idx.period,
-            changeMonthly: idx.changeMonthly,
-            changeYearly: idx.changeYearly,
-            source: "TUIK",
-          },
-        });
-        upsertCount++;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[TÜİK] Failed to upsert ${idx.code}/${idx.period}: ${msg}`);
-      }
-    }
-
-    return upsertCount;
+    return totalSynced;
   }
 
-  /** Yİ-ÜFE price escalation: (Pn1 / Pn0) - 1. Periods in "YYYY-MM" format. */
-  async calculatePriceDifference(
-    baseMonth: string,
-    currentMonth: string,
-    indexCode = "YIUFE",
-  ): Promise<number> {
-    const [baseRecord, currentRecord] = await Promise.all([
-      prisma.macroPriceIndex.findFirst({ where: { code: indexCode, period: baseMonth } }),
-      prisma.macroPriceIndex.findFirst({ where: { code: indexCode, period: currentMonth } }),
-    ]);
+  // ── Health Check ──────────────────────────────────────
 
-    if (!baseRecord) {
-      throw new Error(`No index data found for ${indexCode} at period ${baseMonth}`);
-    }
-    if (!currentRecord) {
-      throw new Error(`No index data found for ${indexCode} at period ${currentMonth}`);
-    }
-    if (baseRecord.value === 0) {
-      throw new Error(`Base period index value is zero for ${baseMonth}`);
-    }
-
-    return currentRecord.value / baseRecord.value - 1;
-  }
-
-  // ── Health Check ──────────────────────────────────────────
-
-  async healthCheck(): Promise<HealthCheckResult> {
+  async healthCheck(): Promise<{ ok: boolean; latencyMs: number }> {
     const start = Date.now();
+    const apiKey = getEvdsApiKey();
+    if (!apiKey) {
+      return { ok: false, latencyMs: Date.now() - start };
+    }
+
     try {
-      const res = await fetch(this.config.baseUrl, {
-        method: "HEAD",
-        signal: AbortSignal.timeout(5000),
-      });
+      const url = `${EVDS_BASE_URL}/series=${CPI_SERIES.code}&startDate=01-01-2025&endDate=01-02-2025&type=json&key=${apiKey}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
       return { ok: res.ok, latencyMs: Date.now() - start };
     } catch {
       return { ok: false, latencyMs: Date.now() - start };
     }
   }
 
-  // ── Sync Logging ──────────────────────────────────────────
+  // ── Sync Logging ──────────────────────────────────────
 
-  async logSync(operation: string, fn: () => Promise<number>) {
+  async logSync(
+    operation: string,
+    fn: () => Promise<number>,
+  ): Promise<{ status: "COMPLETED" | "FAILED"; recordCount: number; durationMs: number; error?: string }> {
     const startedAt = new Date();
     const log = await prisma.dataSyncLog.create({
       data: { provider: "TUIK", operation, status: "RUNNING", startedAt },
@@ -226,168 +240,116 @@ export class TuikProvider {
 
     try {
       const recordCount = await fn();
+      const durationMs = Date.now() - startedAt.getTime();
       await prisma.dataSyncLog.update({
         where: { id: log.id },
         data: { status: "COMPLETED", recordCount, completedAt: new Date() },
       });
-      return { status: "COMPLETED" as const, recordCount };
+      return { status: "COMPLETED", recordCount, durationMs };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const durationMs = Date.now() - startedAt.getTime();
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       await prisma.dataSyncLog.update({
         where: { id: log.id },
         data: { status: "FAILED", errorMessage, completedAt: new Date() },
       });
-      return { status: "FAILED" as const, recordCount: 0, errorMessage };
+      return { status: "FAILED", recordCount: 0, durationMs, error: errorMessage };
     }
   }
 
-  // ── Private: Shared cache+fetch helper ────────────────────
+  // ── Private: Fetch from EVDS ──────────────────────────
 
-  private async fetchCached(
-    cacheKey: string,
-    filter: (def: IndexDef) => boolean,
-  ): Promise<MacroIndex[]> {
-    const cached = await this.cache.get<MacroIndex[]>(cacheKey);
-    if (cached) return cached;
-
-    const defs = INDEX_DEFS.filter(filter);
-    const results: MacroIndex[] = [];
-    for (const def of defs) {
-      const items = await this.fetchIndicator(def);
-      results.push(...items);
-    }
-
-    if (results.length > 0) {
-      await this.cache.set(cacheKey, results, this.config.cache, "TUIK");
-    }
-    return results;
-  }
-
-  // ── Private: Fetch a single indicator via TÜİK API ───────
-
-  private async fetchIndicator(def: IndexDef): Promise<MacroIndex[]> {
-    await this.rateLimiter.acquire();
-
-    const rawData = await this.circuitBreaker.execute(() =>
-      withRetry(
-        () =>
-          this.postApi("/api/GrafikVeri/GetSonDurum", {
-            indicatorId: def.indicatorId,
-            bultenKonuId: def.bultenKonuId,
-          }),
-        { maxRetries: this.config.maxRetries, baseDelayMs: this.config.baseDelayMs },
-      ),
-    );
-
-    return this.parseGrafikVeriResponse(rawData, def);
-  }
-
-  /**
-   * Parse the response from GetSonDurum endpoint.
-   * The response shape is undocumented; we guard against unexpected formats.
-   */
-  private parseGrafikVeriResponse(rawData: unknown, def: IndexDef): MacroIndex[] {
-    let items: unknown;
-
-    if (Array.isArray(rawData)) {
-      items = rawData;
-    } else if (typeof rawData === "object" && rawData !== null) {
-      const obj = rawData as Record<string, unknown>;
-      items = obj.data ?? obj.value ?? obj.result ?? obj.items;
-    }
-
-    if (!items || !Array.isArray(items)) {
-      console.warn(`[TÜİK] Unexpected response shape for ${def.code}; returning empty`);
+  private async fetchSeries(series: EvdsSeries): Promise<MacroIndexEntry[]> {
+    const apiKey = getEvdsApiKey();
+    if (!apiKey) {
+      console.warn(
+        `[TÜİK] TCMB_EVDS_KEY not set — returning empty for ${series.code}`,
+      );
       return [];
     }
 
-    const results: MacroIndex[] = [];
-    for (const item of items) {
-      if (!isTuikGrafikVeriItem(item)) continue;
-      const period = normalizePeriod(item.donem);
-      if (!period) continue;
+    await tuikLimiter.acquire();
 
-      results.push({
-        code: def.code,
-        name: def.name,
-        value: item.deger,
-        period,
-        changeMonthly: item.aylikDegisim ?? null,
-        changeYearly: item.yillikDegisim ?? null,
-      });
-    }
+    const { startDate, endDate } = getDefaultDateRange();
+    // EVDS3: key goes in header, not URL
+    const url =
+      `${EVDS_BASE_URL}/series=${series.code}` +
+      `&startDate=${startDate}&endDate=${endDate}` +
+      `&type=json`;
 
-    return results;
-  }
-
-  // ── Private: HTTP helper ──────────────────────────────────
-
-  private async postApi(path: string, body: Record<string, unknown>): Promise<unknown> {
-    const url = `${this.config.baseUrl}${path}`;
     const res = await fetch(url, {
-      method: "POST",
-      headers: TUIK_HEADERS,
-      body: JSON.stringify(body),
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "IhalePro/1.0",
+        key: apiKey,
+      },
       signal: AbortSignal.timeout(15000),
     });
 
     if (!res.ok) {
-      throw new Error(`TÜİK API error: ${res.status} ${res.statusText}`);
+      throw new Error(
+        `TCMB EVDS error for ${series.code}: ${res.status} ${res.statusText}`,
+      );
     }
 
-    return res.json() as Promise<unknown>;
+    const data = (await res.json()) as EvdsResponse;
+    const items = data.items ?? [];
+
+    return parseEvdsItems(items, series.code);
+  }
+
+  // ── Private: Upsert to PriceIndex ─────────────────────
+
+  private async upsertEntries(
+    entries: MacroIndexEntry[],
+    indexName: string,
+  ): Promise<number> {
+    let count = 0;
+
+    for (const entry of entries) {
+      try {
+        await prisma.priceIndex.upsert({
+          where: {
+            sector_item_month: {
+              sector: "Makro Endeks",
+              item: indexName,
+              month: entry.period,
+            },
+          },
+          update: {
+            price: entry.value,
+            change: entry.change,
+            source: "TÜİK",
+          },
+          create: {
+            sector: "Makro Endeks",
+            item: indexName,
+            unit: "",
+            month: entry.period,
+            price: entry.value,
+            change: entry.change,
+            source: "TÜİK",
+          },
+        });
+        count++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[TÜİK] Failed to upsert ${indexName}/${entry.period}: ${msg}`,
+        );
+      }
+    }
+
+    return count;
   }
 }
 
-// ─── Period Normalization (module-level) ─────────────────────
-
-function normalizePeriod(raw: string): string | null {
-  if (/^\d{4}-\d{2}$/.test(raw)) return raw;
-
-  const dashMatch = raw.match(/^(\d{4})-(\d{1,2})$/);
-  if (dashMatch) return `${dashMatch[1]}-${dashMatch[2].padStart(2, "0")}`;
-
-  const normalized = raw.toLowerCase().trim();
-  for (const [monthName, monthNum] of Object.entries(MONTH_MAP)) {
-    if (normalized.includes(monthName)) {
-      const yearMatch = normalized.match(/\d{4}/);
-      if (yearMatch) return `${yearMatch[0]}-${monthNum}`;
-    }
-  }
-
-  return null;
-}
-
-// ─── Exported Functions (convenience wrappers) ──────────────
-
-export async function fetchConstructionCostIndex(): Promise<MacroIndex[]> {
-  return tuikProvider.fetchConstructionCostIndex();
-}
-
-export async function fetchPPIIndex(): Promise<MacroIndex[]> {
-  return tuikProvider.fetchPPIIndex();
-}
-
-export async function fetchCPIIndex(): Promise<MacroIndex[]> {
-  return tuikProvider.fetchCPIIndex();
-}
-
-export async function syncMacroIndices(): Promise<number> {
-  return tuikProvider.syncMacroIndices();
-}
-
-export async function calculatePriceDifference(
-  baseMonth: string,
-  currentMonth: string,
-  indexCode?: string,
-): Promise<number> {
-  return tuikProvider.calculatePriceDifference(baseMonth, currentMonth, indexCode);
-}
-
-// ─── Singleton Instance ─────────────────────────────────────
+// ─── Singleton ──────────────────────────────────────────────
 
 const globalForTuik = globalThis as unknown as { tuikProvider?: TuikProvider };
-export const tuikProvider = globalForTuik.tuikProvider ?? new TuikProvider();
+export const tuikProvider =
+  globalForTuik.tuikProvider ?? new TuikProvider();
 if (process.env.NODE_ENV !== "production") {
   globalForTuik.tuikProvider = tuikProvider;
 }

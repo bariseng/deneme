@@ -57,19 +57,24 @@ vi.mock("@/lib/cache/redis", () => ({
   },
   cacheGet: async (key: string, fetcher: () => Promise<unknown>, opts?: { ttl?: number; prefix?: string }) => {
     const fullKey = opts?.prefix ? `${opts.prefix}:${key}` : key;
-    const cached = await mockRedis.get(fullKey);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = mockRedis as any;
+    const cached = await r.get(fullKey);
     if (cached !== null && cached !== undefined) return cached;
     const value = await fetcher();
-    await mockRedis.set(fullKey, value, { ex: opts?.ttl || 300 });
+    await r.set(fullKey, value, { ex: opts?.ttl || 300 });
     return value;
   },
   cacheInvalidate: async (key: string, prefix?: string) => {
     const fullKey = prefix ? `${prefix}:${key}` : key;
-    await mockRedis.del(fullKey);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (mockRedis as any).del(fullKey);
   },
   cacheInvalidatePrefix: async (prefix: string) => {
-    const keys = await mockRedis.keys(`${prefix}:*`);
-    if (keys.length > 0) await mockRedis.del(...keys);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = mockRedis as any;
+    const keys = await r.keys(`${prefix}:*`);
+    if (keys.length > 0) await r.del(...keys);
     return keys.length;
   },
   cacheSWR: vi.fn(),

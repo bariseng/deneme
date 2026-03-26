@@ -110,7 +110,7 @@ async function checkCancellations(): Promise<number> {
       // ihaleDurumId: 4 = IPTAL
       const isCancelled = detail.ihaleDurumId === 4;
       // Detect date change (postponement)
-      const newDeadline = new Date(detail.ihaleTarihi);
+      const newDeadline = new Date(detail.ihaleTarihSaat ?? detail.ihaleTarihi ?? Date.now());
       const isPostponed = tender.deadline && Math.abs(newDeadline.getTime() - tender.deadline.getTime()) > 3600_000;
 
       if (!isCancelled && !isPostponed) continue;

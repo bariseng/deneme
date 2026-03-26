@@ -11,9 +11,7 @@ import { resolve } from "path";
 import dotenv from "dotenv";
 dotenv.config({ path: resolve(process.cwd(), ".env.local"), override: true });
 
-// @ts-expect-error — script runs from project root with tsx, path resolves at runtime
 import { PrismaClient } from "../src/generated/prisma/client";
-// @ts-expect-error — adapter import
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const url = process.env.DATABASE_URL || "";
@@ -32,52 +30,72 @@ const EKAP_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
   "api-version": "v1",
   Origin: "https://ekapv2.kik.gov.tr",
+  Referer: "https://ekapv2.kik.gov.tr/ekap/search",
+  "Accept-Language": "tr",
   "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+  "sec-ch-ua": '"Chromium";"v="138", "Google Chrome";v="138"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"macOS"',
 };
 
 const TENDER_TYPE_MAP: Record<string, string> = {
-  Yapım: "YAPIM",
+  "1": "MAL_ALIMI",
+  "2": "YAPIM",
+  "3": "HIZMET",
+  "4": "DANISMANLIK",
+  "Yapım": "YAPIM",
   "Mal Alımı": "MAL_ALIMI",
   "Hizmet Alımı": "HIZMET",
+  "Hizmet": "HIZMET",
   "Danışmanlık Hizmet Alımı": "DANISMANLIK",
 };
 
-const STATUS_MAP: Record<number, string> = {
-  1: "BASVURU_ACIK",
-  2: "DEGERLENDIRME",
-  3: "SONUCLANDI",
-  4: "IPTAL",
-  5: "YAKLASAN",
+const STATUS_MAP: Record<string, string> = {
+  "1": "YAKLASAN",
+  "2": "BASVURU_ACIK",
+  "3": "DEGERLENDIRME",
+  "4": "SONUCLANDI",
+  "5": "IPTAL",
 };
 
 // ─── Types ──────────────────────────────────────────────────
 
 interface EkapTenderRaw {
-  ihaleId: number;
+  id?: string;
+  ihaleId?: number;
   ihaleAdi: string;
-  iknYili: number;
-  iknSayi: number;
+  ikn?: string;
+  iknYili?: number;
+  iknSayi?: number;
   idareAdi: string;
-  il: string;
+  ihaleIlAdi?: string;
+  il?: string;
   ilce?: string;
-  ihaleTarihi: string;
+  ihaleTarihSaat?: string;
+  ihaleTarihi?: string;
   yaklesikMaliyet?: number;
+  ihaleTip?: string;
+  ihaleTipAciklama?: string;
   ihaleTuru?: string;
-  ihaleDurumu?: string;
+  ihaleDurum?: string;
+  ihaleDurumAciklama?: string;
   ihaleDurumId?: number;
+  ihaleDurumu?: string;
   eIhale?: boolean;
   yabanciIsteklilereIzinVeriliyorMu?: boolean;
   kismiTeklifMi?: boolean;
   ortakAlimMi?: boolean;
   ilanTuru?: string;
   ilanTarihi?: string;
+  ilanVarMi?: boolean;
   okasKodlar?: string[];
   aciklama?: string;
   teminatOrani?: number;
   iletisimAdi?: string;
   iletisimTelefon?: string;
   iletisimEposta?: string;
+  dokumanSayisi?: number;
 }
 
 interface EkapListResponse {
@@ -96,9 +114,9 @@ function formatMonth(year: number, month: number): string {
 }
 
 function getMonthRange(year: number, month: number): { start: string; end: string } {
-  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const start = `${year}-${String(month).padStart(2, "0")}-01T00:00:00.000Z`;
   const lastDay = new Date(year, month, 0).getDate();
-  const end = `${year}-${String(month).padStart(2, "0")}-${lastDay}`;
+  const end = `${year}-${String(month).padStart(2, "0")}-${lastDay}T23:59:59.999Z`;
   return { start, end };
 }
 
@@ -107,9 +125,10 @@ function mapTenderType(ekapType?: string): string {
   return TENDER_TYPE_MAP[ekapType] ?? "HIZMET";
 }
 
-function mapStatus(durumId?: number): string {
-  if (!durumId) return "BASVURU_ACIK";
-  return STATUS_MAP[durumId] ?? "BASVURU_ACIK";
+function mapStatus(durumCode?: string | number): string {
+  if (!durumCode) return "BASVURU_ACIK";
+  const key = String(durumCode);
+  return STATUS_MAP[key] ?? "BASVURU_ACIK";
 }
 
 // ─── EKAP API Call ──────────────────────────────────────────
@@ -121,22 +140,40 @@ async function fetchEkapPage(
 ): Promise<EkapListResponse> {
   const body = {
     searchText: "",
+    filterType: null,
+    ikNdeAra: true,
+    ihaleAdindaAra: true,
+    searchType: "GirdigimGibi",
     iknYili: null,
     iknSayi: null,
-    ihaleTarihBaslangic: dateStart,
-    ihaleTarihBitis: dateEnd,
-    ihaleDurumIdList: [],
+    ihaleTarihSaatBaslangic: dateStart,
+    ihaleTarihSaatBitis: dateEnd,
+    ilanTarihSaatBaslangic: null,
+    ilanTarihSaatBitis: null,
+    idareKodList: [],
+    yasaKapsami4734List: [],
     ihaleTuruIdList: [],
     ihaleUsulIdList: [],
-    ilIdList: [],
-    okasKodList: [],
-    kurumIdList: [],
+    ihaleUsulAltIdList: [],
+    ihaleIlIdList: [],
+    ihaleDurumIdList: [],
+    idareIdList: [],
+    ihaleIlanTuruIdList: [],
+    teklifTuruIdList: [],
+    asiriDusukTeklifIdList: [],
+    istisnaMaddeIdList: [],
+    okasBransKodList: [],
+    okasBransAdiList: [],
+    titubbKodList: [],
+    gmdnKodList: [],
     eIhale: null,
     ortakAlimMi: null,
     kismiTeklifMi: null,
     yabanciIsteklilereIzinVeriliyorMu: null,
-    sayfaNo: page,
-    sayfaBoyutu: PAGE_SIZE,
+    orderBy: "ihaleTarihi",
+    siralamaTipi: "desc",
+    paginationSkip: (page - 1) * PAGE_SIZE,
+    paginationTake: PAGE_SIZE,
   };
 
   const url = `${EKAP_BASE_URL}/b_ihalearama/api/Ihale/GetListByParameters`;
@@ -166,7 +203,10 @@ async function upsertBatch(tenders: EkapTenderRaw[]): Promise<{
   let updated = 0;
   let errors = 0;
 
-  const ekapNos = tenders.map((t) => `${t.iknYili}/${t.iknSayi}`);
+  // v2 API returns ikn as "YYYY/NNNNNN", legacy uses iknYili/iknSayi
+  const ekapNos = tenders
+    .map((t) => t.ikn ?? (t.iknYili && t.iknSayi ? `${t.iknYili}/${t.iknSayi}` : null))
+    .filter((n): n is string => n !== null);
   const existing = await prisma.tender.findMany({
     where: { ekapNo: { in: ekapNos } },
     select: { ekapNo: true },
@@ -175,16 +215,29 @@ async function upsertBatch(tenders: EkapTenderRaw[]): Promise<{
 
   for (const raw of tenders) {
     try {
-      const ekapNo = `${raw.iknYili}/${raw.iknSayi}`;
+      const ekapNo = raw.ikn ?? (raw.iknYili && raw.iknSayi ? `${raw.iknYili}/${raw.iknSayi}` : null);
+      if (!ekapNo) { errors++; continue; }
+
+      // Parse v2 date "28.04.2026 10:30" or ISO date
+      const dateStr = raw.ihaleTarihSaat ?? raw.ihaleTarihi ?? "";
+      let deadline: Date;
+      const match = dateStr.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/);
+      if (match) {
+        const [, day, month, year, hour, minute] = match;
+        deadline = new Date(`${year}-${month}-${day}T${hour}:${minute}:00`);
+      } else {
+        deadline = new Date(dateStr || Date.now());
+      }
+
       const data = {
         ekapNo,
         title: raw.ihaleAdi,
         institution: raw.idareAdi,
-        city: raw.il,
+        city: raw.ihaleIlAdi ?? raw.il ?? "",
         district: raw.ilce ?? null,
-        tenderType: mapTenderType(raw.ihaleTuru) as "YAPIM" | "MAL_ALIMI" | "HIZMET" | "DANISMANLIK",
-        status: mapStatus(raw.ihaleDurumId) as "BASVURU_ACIK" | "DEGERLENDIRME" | "SONUCLANDI" | "IPTAL" | "YAKLASAN",
-        deadline: new Date(raw.ihaleTarihi),
+        tenderType: mapTenderType(raw.ihaleTip ?? raw.ihaleTipAciklama ?? raw.ihaleTuru) as "YAPIM" | "MAL_ALIMI" | "HIZMET" | "DANISMANLIK",
+        status: mapStatus(raw.ihaleDurum ?? raw.ihaleDurumId) as "BASVURU_ACIK" | "DEGERLENDIRME" | "SONUCLANDI" | "IPTAL" | "YAKLASAN",
+        deadline,
         publishDate: raw.ilanTarihi ? new Date(raw.ilanTarihi) : new Date(),
         estimatedCost: raw.yaklesikMaliyet ?? null,
         guaranteeRate: raw.teminatOrani ?? null,

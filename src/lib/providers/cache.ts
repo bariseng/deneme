@@ -1,125 +1,65 @@
-// ─── PostgreSQL-backed Cache (via Prisma) ───────────────────
+// ─── Provider-level Cache Abstraction ─────────────────────────
+// Wraps redis cache with provider-specific TTL and prefix
 
-import { prisma } from "@/lib/prisma";
+import { redis } from "@/lib/cache/redis";
+import { cacheGet, cacheSWR, cacheInvalidatePrefix } from "@/lib/cache/redis";
 import type { CacheConfig } from "./types";
 
 export class ProviderCache {
-  /**
-   * Get a cached value by key. Returns null if not found or expired.
-   * When staleWhileRevalidate is used, stale data may be returned
-   * while a background refresh is triggered via the provided revalidateFn.
-   */
-  async get<T>(
-    key: string,
-    revalidateFn?: () => Promise<T>,
-  ): Promise<T | null> {
-    const entry = await prisma.cachedData.findUnique({
-      where: { key },
-    });
+  private readonly prefix: string;
+  private readonly defaultTtl: number;
 
-    if (!entry) return null;
+  constructor(prefix?: string, defaultTtlSeconds?: number) {
+    this.prefix = prefix ?? "provider";
+    this.defaultTtl = defaultTtlSeconds ?? 300;
+  }
 
-    const now = new Date();
-    const isExpired = entry.expiresAt < now;
+  /** Fetch-through cache: returns cached value or calls fetcher */
+  async getOrFetch<T>(key: string, fetcher: () => Promise<T>, ttl?: number): Promise<T> {
+    return cacheGet(key, fetcher, { prefix: this.prefix, ttl: ttl ?? this.defaultTtl });
+  }
 
-    if (!isExpired) {
-      return entry.value as T;
+  /** Direct cache read (returns null if not found) */
+  async get<T>(key: string, fetcherOrNothing?: () => Promise<T>, ttl?: number): Promise<T | null> {
+    if (fetcherOrNothing) {
+      return cacheGet(key, fetcherOrNothing, { prefix: this.prefix, ttl: ttl ?? this.defaultTtl });
     }
-
-    // If expired and we have a revalidate function, trigger background refresh
-    // and return stale data (stale-while-revalidate pattern)
-    if (revalidateFn) {
-      // Fire and forget — refresh in background
-      void revalidateFn().then(async (freshValue) => {
-        await this.set(
-          key,
-          freshValue,
-          {
-            ttl: entry.ttl,
-            staleWhileRevalidate: true,
-            key,
-          },
-          entry.provider,
-        );
-      });
-      // Return stale data
-      return entry.value as T;
+    if (!redis) return null;
+    try {
+      const fullKey = `${this.prefix}:${key}`;
+      return await redis.get<T>(fullKey) ?? null;
+    } catch {
+      return null;
     }
-
-    return null;
   }
 
-  /**
-   * Set a cached value.
-   */
-  async set<T>(
-    key: string,
-    value: T,
-    config: CacheConfig,
-    provider: string,
-  ): Promise<void> {
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + config.ttl * 1000);
+  /** Direct cache write */
+  async set<T>(key: string, value: T, config?: CacheConfig, _name?: string): Promise<void> {
+    if (!redis) return;
+    try {
+      const ttl = config?.ttlSeconds ?? config?.ttl ?? this.defaultTtl;
+      const prefix = config?.prefix ?? this.prefix;
+      const fullKey = `${prefix}:${key}`;
+      await redis.set(fullKey, value, { ex: ttl });
+    } catch {
+      // Best-effort
+    }
+  }
 
-    // JSON fields require JSON.parse(JSON.stringify()) for Prisma InputJsonValue
-    const jsonValue = JSON.parse(JSON.stringify(value));
-
-    await prisma.cachedData.upsert({
-      where: { key },
-      update: {
-        value: jsonValue,
-        provider,
-        ttl: config.ttl,
-        expiresAt,
-        createdAt: now,
-      },
-      create: {
-        key,
-        value: jsonValue,
-        provider,
-        ttl: config.ttl,
-        createdAt: now,
-        expiresAt,
-      },
+  async swr<T>(key: string, fetcher: () => Promise<T>, ttl?: number): Promise<T> {
+    return cacheSWR(key, fetcher, {
+      prefix: this.prefix,
+      ttl: ttl ?? this.defaultTtl,
+      staleTtl: (ttl ?? this.defaultTtl) * 2,
     });
   }
 
-  /**
-   * Invalidate a single cache entry by key.
-   */
-  async invalidate(key: string): Promise<void> {
-    await prisma.cachedData
-      .delete({ where: { key } })
-      .catch(() => {
-        // Ignore if not found
-      });
+  async invalidateAll(): Promise<number> {
+    return cacheInvalidatePrefix(this.prefix);
   }
 
-  /**
-   * Invalidate all cache entries for a specific provider.
-   */
-  async invalidateByProvider(provider: string): Promise<void> {
-    await prisma.cachedData.deleteMany({
-      where: { provider },
-    });
-  }
-
-  /**
-   * Clear all cached data.
-   */
-  async clearAll(): Promise<void> {
-    await prisma.cachedData.deleteMany();
-  }
-
-  /**
-   * Remove expired entries (cleanup job).
-   */
+  /** Clean up expired cache entries */
   async cleanup(): Promise<number> {
-    const result = await prisma.cachedData.deleteMany({
-      where: {
-        expiresAt: { lt: new Date() },
-      },
-    });
-    return result.count;
+    return cacheInvalidatePrefix(this.prefix);
   }
 }
