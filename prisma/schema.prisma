@@ -238,6 +238,7 @@ model Company {
   @@index([city])
   @@index([sector])
   @@index([externalMersisId])
+  @@index([name])
 }
 
 // ─── TENDER ────────────────────────────────────────────────
@@ -1136,6 +1137,7 @@ model PriceIndex {
   @@index([sector])
   @@index([item])
   @@index([month])
+  @@index([sector, month])
 }
 
 model CompetitionDensity {
@@ -2092,6 +2094,7 @@ model UnitPriceIndex {
   @@index([item])
   @@index([city])
   @@index([month])
+  @@index([sector, month])
 }
 
 model UnitPriceTrend {

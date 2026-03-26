@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { tenderFilterSchema } from "@/lib/validations/tender";
 import { Prisma } from "@/generated/prisma/client";
+import { cacheGet, CACHE_KEYS, trackCacheHit, trackCacheMiss } from "@/lib/cache/redis";
+import { TENDER_LIST_SELECT } from "@/lib/db/query-optimizer";
+import { recordApiLatency } from "@/lib/monitoring/metrics";
 
 export async function GET(request: NextRequest) {
+  const start = Date.now();
   try {
     const { searchParams } = request.nextUrl;
     const params = Object.fromEntries(searchParams.entries());
@@ -24,7 +28,6 @@ export async function GET(request: NextRequest) {
       where.OR = [
         { title: { contains: q, mode: "insensitive" } },
         { institution: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
         { ekapNo: { contains: q, mode: "insensitive" } },
       ];
     }
@@ -48,35 +51,57 @@ export async function GET(request: NextRequest) {
     else if (sortField === "viewCount") orderBy.viewCount = sortOrder;
     else orderBy.publishDate = sortOrder;
 
-    const skip = ((page ?? 1) - 1) * (limit ?? 20);
-    const take = limit ?? 20;
+    const currentPage = page ?? 1;
+    const pageSize = limit ?? 20;
+    const skip = (currentPage - 1) * pageSize;
 
-    const [data, total] = await Promise.all([
-      prisma.tender.findMany({
-        where,
-        orderBy,
-        skip,
-        take,
-        include: {
-          documents: { select: { id: true, name: true, category: true, fileSize: true } },
-          _count: { select: { favorites: true, applications: true } },
-        },
-      }),
-      prisma.tender.count({ where }),
-    ]);
+    // Cache key based on query params
+    const cacheKey = `${CACHE_KEYS.TENDER_LIST}:${JSON.stringify({ where, orderBy, skip, take: pageSize })}`;
 
-    return NextResponse.json({
+    const result = await cacheGet(
+      cacheKey,
+      async () => {
+        trackCacheMiss();
+        const [data, total] = await Promise.all([
+          prisma.tender.findMany({
+            where,
+            orderBy,
+            skip,
+            take: pageSize,
+            select: {
+              ...TENDER_LIST_SELECT,
+              documents: { select: { id: true, name: true, category: true, fileSize: true } },
+              _count: { select: { favorites: true, applications: true } },
+            },
+          }),
+          prisma.tender.count({ where }),
+        ]);
+        return { data, total };
+      },
+      { ttl: 120, prefix: "tenders" }, // 2-minute cache
+    );
+
+    trackCacheHit();
+
+    const response = NextResponse.json({
       success: true,
-      data,
+      data: result.data,
       pagination: {
-        total,
-        page: page ?? 1,
-        limit: take,
-        pages: Math.ceil(total / take),
-        hasNext: skip + take < total,
+        total: result.total,
+        page: currentPage,
+        limit: pageSize,
+        pages: Math.ceil(result.total / pageSize),
+        hasNext: skip + pageSize < result.total,
       },
     });
+
+    // Cache-Control: public for CDN caching
+    response.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120");
+    recordApiLatency("/api/tenders", "GET", Date.now() - start, 200);
+
+    return response;
   } catch (error) {
+    recordApiLatency("/api/tenders", "GET", Date.now() - start, 500);
     const message = error instanceof Error ? error.message : "İhale listesi alınamadı";
     return NextResponse.json({ error: message }, { status: 500 });
   }
