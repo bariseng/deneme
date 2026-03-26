@@ -6,8 +6,12 @@
 
 // @ts-expect-error — script runs from project root with tsx, path resolves at runtime
 import { PrismaClient } from "../src/generated/prisma/client";
+// @ts-expect-error — adapter import
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
+const url = process.env.DATABASE_URL || "";
+const adapter = new PrismaPg({ connectionString: url, max: 5 });
+const prisma = new PrismaClient({ adapter });
 
 // ─── Config ─────────────────────────────────────────────────
 
@@ -447,9 +451,55 @@ function parseArgs(): { fromYear: number; toYear: number; resume: boolean } {
 // ─── Entry Point ────────────────────────────────────────────
 
 const options = parseArgs();
-runInitialSync(options)
+
+// Pre-flight checks
+async function preflight(): Promise<boolean> {
+  console.log("\n  Ön kontroller yapılıyor...");
+
+  // 1. Database connection
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log("  ✓ PostgreSQL bağlantısı başarılı");
+  } catch {
+    console.error("  ✗ PostgreSQL'e bağlanılamadı. DATABASE_URL kontrol edin.");
+    console.error(`    DATABASE_URL: ${url ? url.replace(/:[^@]+@/, ":***@") : "(boş)"}`);
+    return false;
+  }
+
+  // 2. EKAP API connectivity
+  try {
+    const res = await fetch(`${EKAP_BASE_URL}/b_ihalearama/api/Ihale/GetListByParameters`, {
+      method: "POST",
+      headers: EKAP_HEADERS,
+      body: JSON.stringify({ searchText: "test", sayfaNo: 1, sayfaBoyutu: 1 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      console.log("  ✓ EKAP API erişimi başarılı");
+    } else {
+      console.error(`  ✗ EKAP API yanıt verdi ama hata döndü: ${res.status}`);
+      return false;
+    }
+  } catch {
+    console.error("  ✗ EKAP API'ye erişilemiyor. İnternet bağlantısını kontrol edin.");
+    console.error(`    EKAP_BASE_URL: ${EKAP_BASE_URL}`);
+    return false;
+  }
+
+  console.log("");
+  return true;
+}
+
+preflight()
+  .then(async (ok) => {
+    if (!ok) {
+      console.error("\n  Ön kontroller başarısız — çıkılıyor.\n");
+      process.exit(1);
+    }
+    return runInitialSync(options);
+  })
   .catch((e) => {
-    console.error("Fatal error:", e);
+    console.error("Fatal error:", e.message || e);
     process.exit(1);
   })
   .finally(async () => {
