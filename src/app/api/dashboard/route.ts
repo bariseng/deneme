@@ -8,6 +8,7 @@ import {
   getPriceIndexChart,
   getPerformanceCard,
 } from "@/lib/services/dashboard-metrics";
+import { getIntegrationDashboard } from "@/lib/services/integration-health";
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,18 +53,24 @@ export async function GET(request: NextRequest) {
             success: true,
             data: await getPerformanceCard(user.id, user.companyId),
           });
+        case "integrations":
+          return NextResponse.json({
+            success: true,
+            data: await getIntegrationDashboard(),
+          });
         default:
           return NextResponse.json({ error: "Geçersiz section" }, { status: 400 });
       }
     }
 
     // Full dashboard data (parallel fetch)
-    const [kpis, monthlyVolume, sectors, cities, performance] = await Promise.all([
+    const [kpis, monthlyVolume, sectors, cities, performance, integrations] = await Promise.all([
       getDashboardKPIs(user.id, user.companyId),
       getMonthlyVolume(12),
       getSectorDistribution(),
       getCityHeatmap(),
       getPerformanceCard(user.id, user.companyId),
+      getIntegrationDashboard(),
     ]);
 
     return NextResponse.json({
@@ -76,6 +83,7 @@ export async function GET(request: NextRequest) {
           cities,
         },
         performance,
+        integrations,
       },
     });
   } catch (error) {
