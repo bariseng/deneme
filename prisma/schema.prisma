@@ -2112,6 +2112,64 @@ model RegionalPriceComparison {
   @@index([item])
 }
 
+// ─── MACRO PRICE INDEX (TÜİK, Yİ-ÜFE, TÜFE) ──────────────
+
+model MacroPriceIndex {
+  id         String   @id @default(cuid())
+  code       String   // "YIUFE", "TUFE", "INSAAT_MALIYET", "INSAAT_ISCILIK", "INSAAT_MALZEME"
+  name       String
+  value      Float
+  baseYear   Int      @default(2015)
+  period     String   // "2026-03" (YYYY-MM)
+  changeMonthly Float? // month-over-month %
+  changeYearly  Float? // year-over-year %
+  source     String   @default("TUIK")
+  createdAt  DateTime @default(now())
+
+  @@unique([code, period])
+  @@index([code])
+  @@index([period])
+  @@index([source])
+}
+
+model MinistryUnitPrice {
+  id         String   @id @default(cuid())
+  code       String   // "15.140/1", "04.743/3"
+  name       String
+  unit       String   // "m³", "ton", "m²", "adet"
+  price      Decimal  @db.Decimal(18, 2)
+  year       Int
+  month      Int      @default(0) // 0 for annual, 1-12 for monthly
+  category   String   // "INSAAT", "MEKANIK", "ELEKTRIK", "ALTYAPI"
+  source     String   // "CSB_YFK", "ILLER_BANKASI", "IMO"
+  region     String?
+  createdAt  DateTime @default(now())
+
+  @@unique([code, year, month, source])
+  @@index([code])
+  @@index([category])
+  @@index([source])
+  @@index([year])
+}
+
+model CommodityPrice {
+  id         String   @id @default(cuid())
+  code       String
+  name       String
+  price      Decimal  @db.Decimal(18, 2)
+  unit       String   // "ton", "kg", "litre"
+  city       String   @default("")
+  exchange   String?  // TOBB borsa adı
+  date       DateTime @db.Date
+  source     String   @default("TOBB")
+  createdAt  DateTime @default(now())
+
+  @@unique([code, city, date, source])
+  @@index([code])
+  @@index([date])
+  @@index([city])
+}
+
 // ─── FINANCIAL HEALTH SCORE ─────────────────────────────────
 
 model FinancialHealthScore {
