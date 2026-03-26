@@ -199,21 +199,29 @@ model VerificationToken {
 // ─── COMPANY ───────────────────────────────────────────────
 
 model Company {
-  id          String   @id @default(cuid())
-  name        String
-  taxNumber   String   @unique
-  taxOffice   String?
-  address     String?
-  city        String?
-  phone       String?
-  email       String?
-  website     String?
-  sector      String?
-  description String?  @db.Text
-  foundedYear Int?
-  employeeCount Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String
+  taxNumber        String   @unique
+  taxOffice        String?
+  address          String?
+  city             String?
+  phone            String?
+  email            String?
+  website          String?
+  sector           String?
+  description      String?  @db.Text
+  foundedYear      Int?
+  employeeCount    Int?
+  externalMersisId String?  @unique
+  externalKapId    String?
+  dunsNumber       String?  @unique
+  vknVerified      Boolean  @default(false)
+  mersisData       Json?
+  capitalAmount    Decimal? @db.Decimal(18, 2)
+  companyType      String?
+  tradeRegNo       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   users       User[]
   bids        Bid[]
@@ -224,10 +232,12 @@ model Company {
   jvAgreements JvAgreementParty[] @relation("JvAgreementCompany")
   healthScores     FinancialHealthScore[] @relation("HealthScoreCompany")
   capacityAnalyses CapacityAnalysis[]     @relation("CapacityCompany")
+  parasutConnection ParasutConnection?    @relation("ParasutCompany")
 
   @@index([taxNumber])
   @@index([city])
   @@index([sector])
+  @@index([externalMersisId])
 }
 
 // ─── TENDER ────────────────────────────────────────────────
@@ -2339,6 +2349,25 @@ model SmartReminder {
   @@index([eventId])
   @@index([scheduledAt])
   @@index([sentAt])
+}
+
+// ─── PARASUT OAUTH CONNECTION ────────────────────────────────
+
+model ParasutConnection {
+  id            String   @id @default(cuid())
+  companyId     String   @unique
+  accessToken   String   @db.Text
+  refreshToken  String   @db.Text
+  tokenExpiresAt DateTime
+  parasutCompanyId String
+  lastSyncAt    DateTime?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company Company @relation("ParasutCompany", fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
 }
 
 // ─── EXTERNAL DATA PROVIDER CACHE & SYNC ────────────────────
