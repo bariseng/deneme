@@ -4,6 +4,13 @@
 // Checkpoints to DataSyncLog so interrupted runs can resume
 // Run: npx tsx scripts/initial-ekap-sync.ts [--from=2021] [--to=2026] [--resume]
 
+import "dotenv/config";
+import { resolve } from "path";
+
+// Also load .env.local (higher priority)
+import dotenv from "dotenv";
+dotenv.config({ path: resolve(process.cwd(), ".env.local"), override: true });
+
 // @ts-expect-error — script runs from project root with tsx, path resolves at runtime
 import { PrismaClient } from "../src/generated/prisma/client";
 // @ts-expect-error — adapter import
