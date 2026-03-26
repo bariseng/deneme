@@ -1,24 +1,19 @@
 /**
- * Payment Service (iyzico / Stripe)
- *
- * In production, this would integrate with iyzico (Turkish market) or Stripe.
- *
- * Required env vars:
- *   IYZICO_API_KEY, IYZICO_SECRET_KEY, IYZICO_BASE_URL
- *   or STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+ * Payment types & pricing plans (client-safe)
+ * Server-only iyzico logic is in src/lib/services/payment.ts
  */
 
-export type PlanId = "free" | "pro" | "enterprise";
+export type PlanId = "free" | "basic" | "pro" | "enterprise";
 
 export interface PricingPlan {
   id: PlanId;
   name: string;
-  price: number; // Monthly in TRY
-  yearlyPrice: number; // Yearly in TRY
+  price: number;
+  yearlyPrice: number;
   features: string[];
   highlighted?: boolean;
   limit: {
-    tenderViews: number; // -1 = unlimited
+    tenderViews: number;
     favorites: number;
     notifications: number;
     competitorTracking: number;
@@ -29,7 +24,7 @@ export interface PricingPlan {
     agenticAI: boolean;
     smartBidOptimization: boolean;
     weeklyBriefing: boolean;
-    multiUser: number; // seats, 0 = single
+    multiUser: number;
     prioritySupport: boolean;
     slaGuarantee: boolean;
   };
@@ -85,18 +80,48 @@ export const pricingPlans: PricingPlan[] = [
     },
   },
   {
+    id: "basic",
+    name: "Başlangıç",
+    price: 299,
+    yearlyPrice: 2870,
+    features: [
+      "Sınırsız ihale görüntüleme",
+      "Gelişmiş arama & filtreleme",
+      "25 favori ihale",
+      "E-posta + push bildirim",
+      "Aylık 10 teklif hazırlama",
+      "Aylık 20 AI kredisi",
+    ],
+    limit: {
+      tenderViews: -1,
+      favorites: 25,
+      notifications: -1,
+      competitorTracking: 3,
+      bids: 10,
+      aiCredits: 20,
+      apiAccess: false,
+      pdfExport: false,
+      agenticAI: false,
+      smartBidOptimization: false,
+      weeklyBriefing: false,
+      multiUser: 0,
+      prioritySupport: false,
+      slaGuarantee: false,
+    },
+  },
+  {
     id: "pro",
     name: "Profesyonel",
-    price: 499,
-    yearlyPrice: 4790,
+    price: 799,
+    yearlyPrice: 7670,
     highlighted: true,
     features: [
-      "Sınırsız ihale görüntüleme & arama",
-      "Sınırsız favori & bildirim (e-posta + push)",
+      "Başlangıç'taki her şey +",
+      "Sınırsız favori & bildirim",
       "Rakip analizi (5 firma takibi)",
-      "Teklif hazırlama araçları (aylık 20 teklif)",
-      "PDF export",
-      "Ayda 50 AI kredisi (chatbot + özet + tahmin)",
+      "Aylık 50 teklif hazırlama",
+      "Aylık 100 AI kredisi",
+      "PDF export & raporlama",
       "Öncelikli müşteri desteği",
     ],
     limit: {
@@ -104,8 +129,8 @@ export const pricingPlans: PricingPlan[] = [
       favorites: -1,
       notifications: -1,
       competitorTracking: 5,
-      bids: 20,
-      aiCredits: 50,
+      bids: 50,
+      aiCredits: 100,
       apiAccess: false,
       pdfExport: true,
       agenticAI: false,
@@ -128,8 +153,7 @@ export const pricingPlans: PricingPlan[] = [
       "Akıllı teklif optimizasyonu & fiyat tahmini",
       "Haftalık AI brifing raporu",
       "API erişimi (3. parti entegrasyon)",
-      "Çoklu kullanıcı (5 koltuk dahil, +₺199/koltuk)",
-      "Özel eğitim & onboarding",
+      "Çoklu kullanıcı (5 koltuk dahil)",
       "SLA garantisi (%99.9 uptime)",
     ],
     limit: {
@@ -154,51 +178,3 @@ export const pricingPlans: PricingPlan[] = [
 export function getPlanById(id: PlanId): PricingPlan | undefined {
   return pricingPlans.find((p) => p.id === id);
 }
-
-class PaymentService {
-  async createCheckout(
-    planId: PlanId,
-    billingPeriod: "monthly" | "yearly",
-    userId: string
-  ): Promise<CheckoutSession> {
-    const plan = pricingPlans.find((p) => p.id === planId);
-    if (!plan) throw new Error("Geçersiz plan");
-    if (plan.id === "free") throw new Error("Ücretsiz plan için ödeme gerekmez");
-
-    const amount = billingPeriod === "yearly" ? plan.yearlyPrice : plan.price;
-
-    // In production: iyzico or Stripe checkout session creation
-    const session: CheckoutSession = {
-      id: `cs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      planId,
-      billingPeriod,
-      amount,
-      currency: "TRY",
-      status: "pending",
-      paymentUrl: `#odeme-demo-${planId}`,
-      createdAt: new Date().toISOString(),
-    };
-
-    return session;
-  }
-
-  async handleWebhook(event: PaymentWebhookEvent): Promise<void> {
-    switch (event.type) {
-      case "payment.success":
-        // Activate subscription — handled by webhook route
-        break;
-      case "payment.failed":
-        break;
-      case "subscription.cancelled":
-        break;
-      case "subscription.renewed":
-        break;
-    }
-  }
-
-  async cancelSubscription(_userId: string): Promise<{ success: boolean }> {
-    return { success: true };
-  }
-}
-
-export const paymentService = new PaymentService();

@@ -73,12 +73,14 @@ export default function PremiumClient() {
 
   const planIcons: Record<PlanId, React.ElementType> = {
     free: Star,
+    basic: Zap,
     pro: Crown,
     enterprise: Building2,
   };
 
   const planColors: Record<PlanId, string> = {
     free: "from-gray-500 to-gray-600",
+    basic: "from-green-500 to-green-700",
     pro: "from-primary to-blue-700",
     enterprise: "from-purple-600 to-purple-800",
   };

@@ -13,7 +13,9 @@ export type Feature =
   | "notification"
   | "bid"
   | "ai_credit"
-  | "competitor";
+  | "competitor"
+  | "report"
+  | "sms";
 
 export interface PlanLimits {
   tender_view: number;  // daily
@@ -22,6 +24,8 @@ export interface PlanLimits {
   bid: number;          // monthly
   ai_credit: number;    // monthly
   competitor: number;   // total tracked
+  report: number;       // monthly
+  sms: number;          // monthly
 }
 
 const PLAN_LIMITS: Record<string, PlanLimits> = {
@@ -32,22 +36,28 @@ const PLAN_LIMITS: Record<string, PlanLimits> = {
     bid: 0,
     ai_credit: 0,
     competitor: 0,
+    report: 0,
+    sms: 0,
   },
   STARTER: {
-    tender_view: -1, // unlimited
-    favorite: -1,
+    tender_view: -1,
+    favorite: 25,
     notification: -1,
-    bid: 20,
-    ai_credit: 50,
-    competitor: 5,
+    bid: 10,
+    ai_credit: 20,
+    competitor: 3,
+    report: 5,
+    sms: 10,
   },
   PRO: {
     tender_view: -1,
     favorite: -1,
     notification: -1,
-    bid: 20,
-    ai_credit: 50,
+    bid: 50,
+    ai_credit: 100,
     competitor: 5,
+    report: 20,
+    sms: 50,
   },
   ENTERPRISE: {
     tender_view: -1,
@@ -56,6 +66,8 @@ const PLAN_LIMITS: Record<string, PlanLimits> = {
     bid: -1,
     ai_credit: -1,
     competitor: -1,
+    report: -1,
+    sms: -1,
   },
 };
 
@@ -80,6 +92,8 @@ export async function ensureQuotas(userId: string, plan: string): Promise<void> 
     { feature: "bid", limit: limits.bid, resetAt: nextMonth },
     { feature: "ai_credit", limit: limits.ai_credit, resetAt: nextMonth },
     { feature: "competitor", limit: limits.competitor, resetAt: nextMonth },
+    { feature: "report", limit: limits.report, resetAt: nextMonth },
+    { feature: "sms", limit: limits.sms, resetAt: nextMonth },
   ];
 
   for (const f of features) {
@@ -364,3 +378,77 @@ export async function upgradePlan(
     data: { converted: true },
   });
 }
+
+// ─── Quota Exceeded Check with Upsell ───────────────────
+
+export async function checkQuotaWithUpsell(
+  userId: string,
+  feature: Feature
+): Promise<{
+  allowed: boolean;
+  used: number;
+  limit: number;
+  remaining: number;
+  upsellMessage?: string;
+  upsellPlan?: string;
+}> {
+  const result = await checkQuota(userId, feature);
+
+  if (!result.allowed) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { plan: true },
+    });
+
+    const currentPlan = user?.plan || "FREE";
+    const nextPlan = getNextPlan(currentPlan);
+
+    return {
+      ...result,
+      upsellMessage: getUpsellMessage(feature, nextPlan),
+      upsellPlan: nextPlan,
+    };
+  }
+
+  // Warn when nearing limit (80% used)
+  if (result.limit > 0 && result.remaining > 0) {
+    const usageRatio = result.used / result.limit;
+    if (usageRatio >= 0.8) {
+      return {
+        ...result,
+        upsellMessage: `${FEATURE_LABELS[feature]} limitinizin %${Math.round(usageRatio * 100)}'ini kullandınız.`,
+      };
+    }
+  }
+
+  return result;
+}
+
+function getNextPlan(current: string): string {
+  const order = ["FREE", "STARTER", "PRO", "ENTERPRISE"];
+  const idx = order.indexOf(current);
+  return idx < order.length - 1 ? order[idx + 1] : current;
+}
+
+function getUpsellMessage(feature: Feature, nextPlan: string): string {
+  const label = FEATURE_LABELS[feature];
+  const planLabel = PLAN_LABELS[nextPlan] || nextPlan;
+  return `${label} limitiniz doldu. ${planLabel} plana yükselterek devam edebilirsiniz.`;
+}
+
+const FEATURE_LABELS: Record<Feature, string> = {
+  tender_view: "İhale görüntüleme",
+  favorite: "Favori ihale",
+  notification: "Bildirim",
+  bid: "Teklif hazırlama",
+  ai_credit: "AI kredi",
+  competitor: "Rakip takibi",
+  report: "Rapor",
+  sms: "SMS bildirim",
+};
+
+const PLAN_LABELS: Record<string, string> = {
+  STARTER: "Başlangıç",
+  PRO: "Profesyonel",
+  ENTERPRISE: "Kurumsal",
+};

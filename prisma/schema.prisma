@@ -686,37 +686,46 @@ model ActivityLog {
 // ─── PAYMENTS ──────────────────────────────────────────────
 
 model Payment {
-  id            String   @id @default(cuid())
-  userId        String
-  planId        String
-  amount        Decimal  @db.Decimal(18, 2)
-  currency      String   @default("TRY")
-  status        String   @default("pending")
-  provider      String   @default("iyzico")
-  providerTxId  String?
-  billingPeriod String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String
+  planId           String
+  amount           Decimal  @db.Decimal(18, 2)
+  currency         String   @default("TRY")
+  status           String   @default("pending") // pending, completed, failed, refunded
+  provider         String   @default("iyzico")
+  providerTxId     String?
+  iyzicoPaymentId  String?
+  installmentCount Int?
+  cardLastFour     String?
+  billingPeriod    String?  // monthly, yearly
+  invoiceStatus    String?  // triggered, created, sent, failed
+  parasutInvoiceId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([iyzicoPaymentId])
 }
 
 model Subscription {
-  id          String    @id @default(cuid())
-  userId      String    @unique
-  plan        SubscriptionPlan @default(FREE)
-  status      String    @default("active")
-  startDate   DateTime  @default(now())
-  endDate     DateTime?
-  cancelledAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  plan                  SubscriptionPlan @default(FREE)
+  status                String    @default("active") // active, cancelled, past_due, expired
+  startDate             DateTime  @default(now())
+  endDate               DateTime?
+  cancelledAt           DateTime?
+  iyzicoSubscriptionRef String?   // iyzico subscription reference code
+  iyzicoCustomerRef     String?   // iyzico customer reference code
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([userId])
   @@index([status])
   @@index([endDate])
+  @@index([iyzicoSubscriptionRef])
 }
 
 // ─── AGENTIC AI ─────────────────────────────────────────
