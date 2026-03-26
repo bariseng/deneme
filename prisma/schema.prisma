@@ -2210,18 +2210,25 @@ model UserLegalAlert {
 
 model InternationalTender {
   id                  String          @id @default(cuid())
+  externalId          String?         @unique
   title               String
   titleTr             String?
   country             String
   city                String?
   sector              String
   estimatedBudget     Decimal?        @db.Decimal(18, 2)
+  estimatedBudgetTry  Decimal?        @db.Decimal(18, 2)
   currency            String          @default("USD")
   description         String          @db.Text
   descriptionTr       String?         @db.Text
   applicationDeadline DateTime
   sourceUrl           String
   sourcePlatform      String
+  cpvCodes            Json?
+  buyerName           String?
+  buyerCountry        String?
+  noticeType          String?
+  languageCode        String?         @default("EN")
   status              IntTenderStatus @default(OPEN)
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
@@ -2230,6 +2237,8 @@ model InternationalTender {
   @@index([sector])
   @@index([status])
   @@index([applicationDeadline])
+  @@index([sourcePlatform])
+  @@index([externalId])
 }
 
 model CountryProfile {
