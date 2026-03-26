@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { useAICredit } from "@/lib/quota";
-import { simulateOCR, saveOCRResult } from "@/lib/document-manager";
+import { prisma } from "@/lib/prisma";
+import { processDocument } from "@/lib/providers/ocr-provider";
+import { generateDownloadUrl } from "@/lib/providers/storage-provider";
+import { saveOCRResult } from "@/lib/document-manager";
 
 /**
  * POST /api/documents/:id/ocr — Run OCR on a document version
+ * Body: { versionId? } — if not provided, uses latest version
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await requireAuth();
@@ -20,24 +24,71 @@ export async function POST(
     if (!credit.success) {
       return NextResponse.json(
         { error: credit.message, upgradeRequired: true },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
-    // Simulate OCR processing
-    const sampleText = body.text || `Bu ihale şartnamesi kapsamında yaklaşık maliyet hesaplanmıştır.
-Geçici teminat oranı %6 olarak belirlenmiş olup, birim fiyat teklif cetveli usulüyle
-ihale gerçekleştirilecektir. İş deneyim belgesi tutarı teklif edilen bedelin %80'inden
-az olamaz. Sözleşme kapsamında KDV hariç fatura düzenlenecektir.`;
-
-    const ocrResult = await simulateOCR(sampleText);
-
-    // Save OCR result if versionId provided
+    // Find the document version to OCR
+    let version;
     if (body.versionId) {
-      await saveOCRResult(body.versionId, ocrResult.extractedText);
+      version = await prisma.documentVersion.findUnique({
+        where: { id: body.versionId },
+      });
+    } else {
+      // Latest version
+      version = await prisma.documentVersion.findFirst({
+        where: { documentId: id },
+        orderBy: { version: "desc" },
+      });
     }
 
-    return NextResponse.json({ success: true, data: ocrResult });
+    if (!version?.fileUrl) {
+      return NextResponse.json({ error: "Doküman versiyonu bulunamadı" }, { status: 404 });
+    }
+
+    // Check if OCR already done for this version
+    if (version.ocrText) {
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        data: {
+          text: version.ocrText,
+          versionId: version.id,
+          version: version.version,
+        },
+      });
+    }
+
+    // Download file from R2 for OCR processing
+    const downloadInfo = await generateDownloadUrl(version.fileUrl, 300);
+    const fileResponse = await fetch(downloadInfo.url);
+
+    if (!fileResponse.ok) {
+      return NextResponse.json({ error: "Dosya indirilemedi" }, { status: 500 });
+    }
+
+    const buffer = Buffer.from(await fileResponse.arrayBuffer());
+    const mimeType = version.mimeType || "application/pdf";
+
+    // Run OCR
+    const ocrResult = await processDocument(buffer, mimeType);
+
+    // Save OCR result to version
+    await saveOCRResult(version.id, ocrResult.text);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        text: ocrResult.text,
+        confidence: ocrResult.confidence,
+        pageCount: ocrResult.pageCount,
+        keywords: ocrResult.keywords,
+        processingTime: ocrResult.processingTime,
+        language: ocrResult.language,
+        versionId: version.id,
+        version: version.version,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "OCR işlemi başarısız";
     if (message === "UNAUTHORIZED") {
