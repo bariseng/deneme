@@ -19,6 +19,8 @@ export const PROVIDER_DEFAULTS = {
   MERSIS: { rateLimitMs: 1000, maxTokens: 3, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
   IYZICO: { rateLimitMs: 200, maxTokens: 10, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
   NETGSM: { rateLimitMs: 1000, maxTokens: 5, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
+  MEVZUAT: { rateLimitMs: 2000, maxTokens: 2, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
+  RESMI_GAZETE: { rateLimitMs: 2000, maxTokens: 2, circuitBreakerThreshold: 5, circuitBreakerResetMs: 60_000 },
 } as const;
 
 export interface CacheConfig {

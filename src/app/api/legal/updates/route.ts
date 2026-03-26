@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
     if (action === "seed") {
       const results = await runLegalScan();
-      return NextResponse.json({ seeded: results.length });
+      return NextResponse.json({ seeded: results.total });
     }
 
     if (action === "stats") {

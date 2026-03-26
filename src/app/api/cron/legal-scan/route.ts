@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const results = await runLegalScan();
     return NextResponse.json({
       success: true,
-      newUpdates: results.length,
+      ...results,
       timestamp: new Date().toISOString(),
     });
   } catch (e: unknown) {

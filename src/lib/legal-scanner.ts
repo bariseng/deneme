@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { LegalSource, LegalCategory, ImpactLevel } from "@/generated/prisma/client";
+import { resmiGazeteProvider } from "@/lib/providers/resmi-gazete-provider";
+import { mevzuatProvider } from "@/lib/providers/mevzuat-provider";
 
 // ─── TYPES ──────────────────────────────────────────────────
 
@@ -11,53 +13,37 @@ export interface RawLegalItem {
   rawContent: string;
 }
 
-// ─── MOCK SCANNER (gerçek scraper yapısı hazır) ─────────────
+// ─── REAL SCANNERS ──────────────────────────────────────────
 
 export async function scanOfficialGazette(): Promise<RawLegalItem[]> {
-  // Mock: Resmi Gazete RSS/scrape
-  return [
-    {
-      title: "Kamu İhale Kanununda Değişiklik Yapılmasına Dair Kanun",
-      source: "RESMI_GAZETE",
-      url: "https://www.resmigazete.gov.tr/eskiler/2026/03/20260320.htm",
-      publishDate: new Date("2026-03-20"),
-      rawContent: `Madde 1 – 4/1/2002 tarihli ve 4734 sayılı Kamu İhale Kanununun 10 uncu maddesinin birinci fıkrasının (a) bendine aşağıdaki alt bent eklenmiştir.\n\n"7) İsteklinin son beş yıl içinde kamu ihalelerinde gösterdiği performans değerlendirmesi."\n\nMadde 2 – Aynı Kanunun 53 üncü maddesine aşağıdaki fıkra eklenmiştir.\n\n"Elektronik ihale platformu üzerinden gerçekleştirilen ihalelerde, teklif değerlendirme süreci yapay zeka destekli analiz araçları ile desteklenebilir."`,
-    },
-    {
-      title: "Kamu İhale Genel Tebliğinde Değişiklik Yapılmasına Dair Tebliğ",
-      source: "RESMI_GAZETE",
-      url: "https://www.resmigazete.gov.tr/eskiler/2026/03/20260318.htm",
-      publishDate: new Date("2026-03-18"),
-      rawContent: `Madde 1 – 22/8/2009 tarihli ve 27327 sayılı Resmî Gazete'de yayımlanan Kamu İhale Genel Tebliğinin 45 inci maddesinin birinci fıkrası aşağıdaki şekilde değiştirilmiştir.\n\n"(1) Yaklaşık maliyetin hesaplanmasında, Türkiye İstatistik Kurumu tarafından yayımlanan güncel birim fiyat endeksleri esas alınır."`,
-    },
-  ];
+  try {
+    const entries = await resmiGazeteProvider.fetchDailyGazette();
+    return entries.map((e) => ({
+      title: e.title,
+      source: "RESMI_GAZETE" as LegalSource,
+      url: e.url,
+      publishDate: e.publishDate,
+      rawContent: e.content || e.title,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function scanKikAnnouncements(): Promise<RawLegalItem[]> {
-  // Mock: ihale.gov.tr duyurular
-  return [
-    {
-      title: "2026 Yılı İhale Eşik Değerleri ve Parasal Limitleri Güncellendi",
-      source: "KIK",
-      url: "https://www.ihale.gov.tr/DuyuruDetay/2026-esik-degerleri",
-      publishDate: new Date("2026-03-15"),
-      rawContent: `Kamu İhale Kurumu tarafından 2026 yılında uygulanacak eşik değerler ve parasal limitler güncellenmiştir.\n\nAçık ihale usulü ile yapılacak mal ve hizmet alımlarında:\n- Eşik değer: 15.876.291 TL (önceki: 13.245.678 TL)\n- Doğrudan temin limiti: 789.432 TL (önceki: 657.890 TL)\n\nYapım işlerinde:\n- Eşik değer: 31.752.582 TL (önceki: 26.491.356 TL)`,
-    },
-    {
-      title: "Elektronik İhale Uygulama Yönetmeliğinde Değişiklik",
-      source: "KIK",
-      url: "https://www.ihale.gov.tr/DuyuruDetay/e-ihale-yonetmelik-degisiklik",
-      publishDate: new Date("2026-03-12"),
-      rawContent: `Elektronik İhale Uygulama Yönetmeliğinin 5 inci maddesinin 2 nci fıkrası değiştirilmiştir.\n\nEski metin: "İhalelerde elektronik teklif, idarenin belirlediği formatta sunulur."\n\nYeni metin: "İhalelerde elektronik teklif, EKAP üzerinden standart formatta sunulur. Teklifler şifrelenerek saklanır ve ihale komisyonu tarafından belirlenen tarihte açılır."`,
-    },
-    {
-      title: "İş Deneyim Belgesi Düzenlenmesine İlişkin Duyuru",
-      source: "KIK",
-      url: "https://www.ihale.gov.tr/DuyuruDetay/is-deneyim-belgesi",
-      publishDate: new Date("2026-03-10"),
-      rawContent: `İş deneyim belgelerinin düzenlenmesine ilişkin usul ve esaslarda güncelleme yapılmıştır.\n\nBundan böyle:\n1. İş deneyim belgeleri EKAP üzerinden elektronik olarak düzenlenecektir.\n2. Belge geçerlilik süresi 15 yıldan 10 yıla indirilmiştir.\n3. Alt yüklenici iş bitirme belgeleri, ana yüklenicinin onayı ile düzenlenecektir.`,
-    },
-  ];
+  // KİK announcements are fetched via resmiGazeteProvider.syncKikAnnouncements
+  // Here we return empty — the cron job handles persistence directly
+  return [];
+}
+
+export async function scanMevzuatChanges(): Promise<number> {
+  try {
+    const lawCount = await mevzuatProvider.syncTrackedLaws();
+    const regCount = await mevzuatProvider.syncTrackedRegulations();
+    return lawCount + regCount;
+  } catch {
+    return 0;
+  }
 }
 
 // ─── CLASSIFY ───────────────────────────────────────────────
@@ -190,16 +176,23 @@ export function generateDiff(oldText: string, newText: string): DiffSection[] {
 // ─── SEED / SCAN ────────────────────────────────────────────
 
 export async function runLegalScan() {
-  const [gazetteItems, kikItems] = await Promise.all([
-    scanOfficialGazette(),
-    scanKikAnnouncements(),
-  ]);
-
-  const allItems = [...gazetteItems, ...kikItems];
   const results = [];
 
-  for (const item of allItems) {
-    // Check duplicate
+  // 1. Scan Resmi Gazete for procurement-related publications
+  const gazetteCount = await resmiGazeteProvider.syncDailyGazette();
+
+  // 2. Scan KİK announcements
+  const kikCount = await resmiGazeteProvider.syncKikAnnouncements();
+
+  // 3. Scan KİK Kurul Kararları
+  const kikDecisionCount = await resmiGazeteProvider.syncKikDecisions();
+
+  // 4. Check tracked laws for changes (mevzuat.gov.tr)
+  const mevzuatCount = await scanMevzuatChanges();
+
+  // 5. Also process any direct gazette items not yet saved
+  const gazetteItems = await scanOfficialGazette();
+  for (const item of gazetteItems) {
     const exists = await prisma.legalUpdate.findFirst({
       where: { originalUrl: item.url },
     });
@@ -223,26 +216,17 @@ export async function runLegalScan() {
       },
     });
 
-    // Generate mock diff for regulation changes
-    if (category === "YONETMELIK" || category === "KANUN") {
-      const oldText = 'Eski metin: "İhalelerde mevcut usul ve esaslar uygulanır."';
-      const newText = item.rawContent.substring(0, 500);
-      const changedSections = generateDiff(oldText, newText);
-
-      await prisma.legalUpdateDiff.create({
-        data: {
-          updateId: update.id,
-          oldText,
-          newText,
-          changedSections: JSON.parse(JSON.stringify(changedSections)),
-        },
-      });
-    }
-
     results.push(update);
   }
 
-  return results;
+  return {
+    newUpdates: results.length,
+    gazetteSync: gazetteCount,
+    kikSync: kikCount,
+    kikDecisions: kikDecisionCount,
+    mevzuatSync: mevzuatCount,
+    total: results.length + gazetteCount + kikCount + kikDecisionCount + mevzuatCount,
+  };
 }
 
 // ─── QUERIES ────────────────────────────────────────────────
