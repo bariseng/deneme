@@ -4,36 +4,8 @@
   "regions": ["fra1"],
   "crons": [
     {
-      "path": "/api/cron/sync-ekap",
-      "schedule": "0 */2 * * *"
-    },
-    {
-      "path": "/api/cron/sync-ted",
-      "schedule": "30 */3 * * *"
-    },
-    {
-      "path": "/api/cron/deadline-reminders",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/ekap-reminder",
-      "schedule": "0 8,12,16 * * *"
-    },
-    {
-      "path": "/api/cron/daily-digest",
-      "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/legal-scan",
-      "schedule": "0 6 * * 1"
-    },
-    {
-      "path": "/api/cron/agent-scan",
-      "schedule": "0 */4 * * *"
-    },
-    {
-      "path": "/api/cron/reconcile-ekap",
-      "schedule": "0 2 * * 0"
+      "path": "/api/cron/sync-ekap?mode=full",
+      "schedule": "0 6 * * *"
     }
   ]
 }
