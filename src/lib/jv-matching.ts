@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { JvRequestStatus, JvMatchStatus } from "@/generated/prisma/client";
+import { buildFirmVector, matchCompanies, sanitizeMatchResult } from "@/lib/services/jv-matching";
 
 // ─── KOMŞU İLLER HARİTASI ──────────────────────────────────
 const NEIGHBOR_CITIES: Record<string, string[]> = {
@@ -204,79 +205,62 @@ export async function deleteJvRequest(id: string) {
 export async function findMatches(requestId: string) {
   const request = await prisma.jvRequest.findUnique({
     where: { id: requestId },
-    include: { company: true },
+    include: { company: true, tender: true },
   });
   if (!request) throw new Error("İlan bulunamadı");
 
-  // Kendi firması hariç tüm firmaları al
+  // Build requesting company's vector
+  const myVector = await buildFirmVector(request.companyId);
+
+  // Get candidate companies (exclude self)
   const candidates = await prisma.company.findMany({
     where: { id: { not: request.companyId } },
+    select: { id: true },
+    take: 200,
   });
 
-  const scores: MatchScore[] = [];
+  // Match candidates using embedding-based algorithm
+  const targetCity = request.tender?.city || request.city;
+  const requiredAmount = Number(request.requiredExperienceAmount);
 
-  for (const candidate of candidates) {
-    // Firma istatistikleri
-    const [wonTenders, totalBids, completedContracts] = await Promise.all([
-      prisma.bid.count({
-        where: {
-          companyId: candidate.id,
-          status: "TAMAMLANDI",
-        },
-      }),
-      prisma.bid.count({ where: { companyId: candidate.id } }),
-      prisma.contract?.count({
-        where: {
-          userId: { in: await prisma.user.findMany({ where: { companyId: candidate.id }, select: { id: true } }).then(u => u.map(x => x.id)) },
-          status: "TAMAMLANDI",
-        },
-      }).catch(() => 0) ?? 0,
-    ]);
+  const matchResults = await Promise.all(
+    candidates.map(async (c) => {
+      try {
+        const cVector = await buildFirmVector(c.id);
+        return matchCompanies(myVector, cVector, targetCity, requiredAmount);
+      } catch {
+        return null;
+      }
+    }),
+  );
 
-    // Toplam iş deneyim tutarı (tamamlanan sözleşmelerden)
-    const totalExperience = Number(completedContracts) * Number(request.requiredExperienceAmount) * 0.3;
+  const validResults = matchResults
+    .filter((r): r is NonNullable<typeof r> => r !== null && r.score > 15)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20);
 
-    const score = calculateCompatibility(
-      {
-        requiredSpecialty: request.requiredSpecialty,
-        city: request.city,
-        requiredExperienceAmount: Number(request.requiredExperienceAmount),
-      },
-      candidate as CompanyProfile,
-      { wonTenders, totalBids, totalExperience }
-    );
-
-    if (score.totalScore > 10) {
-      scores.push(score);
-    }
-  }
-
-  // Skora göre sırala ve top 20 al
-  scores.sort((a, b) => b.totalScore - a.totalScore);
-  const topMatches = scores.slice(0, 20);
-
-  // Mevcut eşleşmeleri sil ve yeniden oluştur
+  // Replace existing matches
   await prisma.jvMatch.deleteMany({ where: { requestId } });
 
   const created = await Promise.all(
-    topMatches.map((m) =>
-      prisma.jvMatch.create({
+    validResults.map((m) => {
+      const sanitized = sanitizeMatchResult(m);
+      return prisma.jvMatch.create({
         data: {
           requestId,
-          matchedCompanyId: m.companyId,
-          compatibilityScore: m.totalScore,
-          message: `Sektör: ${m.breakdown.sectorScore}/30 | Şehir: ${m.breakdown.cityScore}/20 | Deneyim: ${m.breakdown.experienceScore}/30 | Başarı: ${m.breakdown.successScore}/20`,
+          matchedCompanyId: sanitized.companyId,
+          compatibilityScore: sanitized.score,
+          message: sanitized.explanation,
         },
         include: {
           matchedCompany: {
             select: { id: true, name: true, city: true, sector: true, description: true, foundedYear: true, employeeCount: true },
           },
         },
-      })
-    )
+      });
+    }),
   );
 
-  // İlan durumunu MATCHED yap (eşleşme bulunduysa)
   if (created.length > 0) {
     await prisma.jvRequest.update({
       where: { id: requestId },
