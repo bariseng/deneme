@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { getVendorReviews, getVendorSummary, createVendorReview } from "@/lib/community";
+import { moderateContent } from "@/lib/services/content-moderation";
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,6 +30,18 @@ export async function POST(request: NextRequest) {
 
     if (!body.vendorName || !body.rating) {
       return NextResponse.json({ error: "Firma adı ve puan gerekli" }, { status: 400 });
+    }
+
+    // Content moderation for comment
+    if (body.comment) {
+      const modResult = await moderateContent(body.comment);
+      if (!modResult.approved) {
+        return NextResponse.json(
+          { error: "Yorum moderasyon kontrolünden geçemedi", reasons: modResult.reasons },
+          { status: 422 },
+        );
+      }
+      body.comment = modResult.sanitizedContent || body.comment;
     }
 
     const review = await createVendorReview(user.id, {
