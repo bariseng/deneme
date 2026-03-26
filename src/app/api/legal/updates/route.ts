@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { getLegalUpdates, getLegalStats, runLegalScan } from "@/lib/legal-scanner";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { mevzuatProvider } from "@/lib/providers/mevzuat-provider";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +14,15 @@ export async function GET(request: NextRequest) {
     if (action === "seed") {
       const results = await runLegalScan();
       return NextResponse.json({ seeded: results.total });
+    }
+
+    // When real legal data is enabled, sync tracked laws from mevzuat.gov.tr
+    if (isFeatureEnabled("USE_REAL_LEGAL_DATA") && action === "sync") {
+      const [lawCount, regCount] = await Promise.all([
+        mevzuatProvider.syncTrackedLaws(),
+        mevzuatProvider.syncTrackedRegulations(),
+      ]);
+      return NextResponse.json({ success: true, laws: lawCount, regulations: regCount });
     }
 
     if (action === "stats") {

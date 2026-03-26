@@ -19,7 +19,9 @@
     "migrate:dry-run": "ts-node scripts/migrate-to-real-data.ts --dry-run",
     "migrate:execute": "ts-node scripts/migrate-to-real-data.ts --execute",
     "migrate:rollback": "ts-node scripts/migrate-to-real-data.ts --rollback",
-    "load-test": "k6 run k6/load-test.js"
+    "load-test": "k6 run k6/load-test.js",
+    "ekap:initial-sync": "npx tsx scripts/initial-ekap-sync.ts --resume",
+    "ekap:initial-sync:full": "npx tsx scripts/initial-ekap-sync.ts --from=2021 --to=2026"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

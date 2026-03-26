@@ -5,6 +5,8 @@ import { Prisma } from "@/generated/prisma/client";
 import { cacheGet, CACHE_KEYS, trackCacheHit, trackCacheMiss } from "@/lib/cache/redis";
 import { TENDER_LIST_SELECT } from "@/lib/db/query-optimizer";
 import { recordApiLatency } from "@/lib/monitoring/metrics";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { ekapProvider } from "@/lib/providers/ekap-provider";
 
 export async function GET(request: NextRequest) {
   const start = Date.now();
@@ -54,6 +56,23 @@ export async function GET(request: NextRequest) {
     const currentPage = page ?? 1;
     const pageSize = limit ?? 20;
     const skip = (currentPage - 1) * pageSize;
+
+    // When EKAP real data is enabled, try live search for fresh results
+    if (isFeatureEnabled("USE_REAL_EKAP_DATA") && q) {
+      try {
+        const ekapData = await ekapProvider.searchTenders({
+          searchText: q,
+          sayfaBoyutu: Math.min(pageSize, 50),
+          sayfaNo: currentPage,
+        });
+        // Background upsert — don't block the response
+        if (ekapData.list.length > 0) {
+          void ekapProvider.batchUpsert(ekapData.list).catch(() => {});
+        }
+      } catch {
+        // Fallback to DB — EKAP unavailable
+      }
+    }
 
     // Cache key based on query params
     const cacheKey = `${CACHE_KEYS.TENDER_LIST}:${JSON.stringify({ where, orderBy, skip, take: pageSize })}`;

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { getInternationalTenders, seedInternationalData } from "@/lib/international";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { tedProvider } from "@/lib/providers/ted-provider";
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,6 +12,22 @@ export async function GET(request: NextRequest) {
     if (sp.get("action") === "seed") {
       const result = await seedInternationalData();
       return NextResponse.json(result);
+    }
+
+    // When TED real data is enabled, sync fresh data before serving
+    if (isFeatureEnabled("USE_REAL_TED_DATA")) {
+      try {
+        const country = sp.get("country") || undefined;
+        const tedData = await tedProvider.searchNotices({
+          country: country || "TUR",
+          pageSize: 20,
+        });
+        if (tedData.notices.length > 0) {
+          void tedProvider.batchUpsert(tedData.notices).catch(() => {});
+        }
+      } catch {
+        // Fallback to DB — TED unavailable
+      }
     }
 
     const data = await getInternationalTenders({

@@ -78,13 +78,24 @@ export const updatePriceIndex = inngest.createFunction(
     triggers: [{ cron: "0 6 * * 1" }], // Every Monday at 06:00
   },
   async ({ step }) => {
-    const result = await step.run("fetch-price-data", async () => {
+    const tuikResult = await step.run("sync-tuik-macro-indices", async () => {
+      const { isFeatureEnabled } = await import("@/lib/feature-flags");
+      if (!isFeatureEnabled("USE_REAL_PRICE_INDEX")) {
+        return { skipped: true, reason: "USE_REAL_PRICE_INDEX is off" };
+      }
+
+      const { tuikProvider } = await import("@/lib/providers/tuik-provider");
+      const count = await tuikProvider.syncMacroIndices();
+      return { skipped: false, synced: count };
+    });
+
+    const dbCount = await step.run("count-existing-records", async () => {
       const { prisma } = await import("@/lib/prisma");
       const count = await prisma.unitPriceIndex.count();
       return { existingRecords: count };
     });
 
-    return result;
+    return { tuikResult, dbCount };
   },
 );
 
@@ -178,6 +189,66 @@ export const cleanupCache = inngest.createFunction(
   },
 );
 
+// ─── Weekly EKAP Reconciliation ─────────────────────────────
+
+export const reconcileEkap = inngest.createFunction(
+  {
+    id: "reconcile-ekap-weekly",
+    name: "EKAP Weekly Reconciliation",
+    retries: 1,
+    concurrency: { limit: 1 },
+    triggers: [{ cron: "0 2 * * 0" }], // Sunday 02:00
+  },
+  async ({ step }) => {
+    return await step.run("reconcile", async () => {
+      const { isFeatureEnabled } = await import("@/lib/feature-flags");
+      if (!isFeatureEnabled("USE_REAL_EKAP_DATA")) {
+        return { skipped: true, reason: "USE_REAL_EKAP_DATA is off" };
+      }
+
+      // Trigger the reconciliation endpoint
+      const cronSecret = process.env.CRON_SECRET;
+      if (!cronSecret) return { skipped: true, reason: "CRON_SECRET not set" };
+
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const res = await fetch(`${baseUrl}/api/cron/reconcile-ekap`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cronSecret}` },
+      });
+
+      return res.json();
+    });
+  },
+);
+
+// ─── Mevzuat Sync ──────────────────────────────────────────
+
+export const syncMevzuat = inngest.createFunction(
+  {
+    id: "sync-mevzuat-weekly",
+    name: "Mevzuat Weekly Sync",
+    retries: 2,
+    concurrency: { limit: 1 },
+    triggers: [{ cron: "0 6 * * 1" }], // Monday 06:00
+  },
+  async ({ step }) => {
+    return await step.run("sync-laws", async () => {
+      const { isFeatureEnabled } = await import("@/lib/feature-flags");
+      if (!isFeatureEnabled("USE_REAL_LEGAL_DATA")) {
+        return { skipped: true, reason: "USE_REAL_LEGAL_DATA is off" };
+      }
+
+      const { mevzuatProvider } = await import("@/lib/providers/mevzuat-provider");
+      const [laws, regs] = await Promise.all([
+        mevzuatProvider.syncTrackedLaws(),
+        mevzuatProvider.syncTrackedRegulations(),
+      ]);
+
+      return { laws, regulations: regs };
+    });
+  },
+);
+
 // Export all functions for the Inngest serve handler
 export const functions = [
   syncEkap,
@@ -186,4 +257,6 @@ export const functions = [
   ekapReminder,
   sendBatchNotifications,
   cleanupCache,
+  reconcileEkap,
+  syncMevzuat,
 ];
