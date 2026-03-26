@@ -1,6 +1,9 @@
 // ─── İhale Süre Hesaplayıcı (4734/Madde 13) ────────────────
 // Calculates tender deadlines per 4734 Kamu İhale Kanunu
 // Handles working days, official holidays, half-days
+// Holidays fetched from Calendarific/Holiday API (no hardcoded dates)
+
+import { getHolidays as fetchHolidaysFromApi } from "@/lib/providers/holiday-provider";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -54,73 +57,32 @@ export interface Holiday {
   type: "RESMI_TATIL" | "DINI_BAYRAM" | "MILLI_BAYRAM" | "OZEL";
 }
 
-// ─── Turkish Official Holidays (2026) ───────────────────────
-// Dini bayramlar her yıl ~10-11 gün erken gelir (Hicri takvim)
+// ─── Turkish Official Holidays ────────────────────────────────
+// Fetched from Calendarific/Holiday API (no hardcoded religious dates)
+// API handles Islamic holiday date shifts automatically
 
-function getOfficialHolidays(year: number): Holiday[] {
-  const holidays: Holiday[] = [
-    // Milli bayramlar (sabit tarihler)
-    { date: new Date(year, 0, 1), name: "Yılbaşı", type: "RESMI_TATIL" },
-    { date: new Date(year, 3, 23), name: "Ulusal Egemenlik ve Çocuk Bayramı", type: "MILLI_BAYRAM" },
-    { date: new Date(year, 4, 1), name: "Emek ve Dayanışma Günü", type: "RESMI_TATIL" },
-    { date: new Date(year, 4, 19), name: "Atatürk'ü Anma, Gençlik ve Spor Bayramı", type: "MILLI_BAYRAM" },
-    { date: new Date(year, 6, 15), name: "Demokrasi ve Millî Birlik Günü", type: "MILLI_BAYRAM" },
-    { date: new Date(year, 7, 30), name: "Zafer Bayramı", type: "MILLI_BAYRAM" },
-    { date: new Date(year, 9, 28), name: "Cumhuriyet Bayramı (Yarım gün)", type: "MILLI_BAYRAM" },
-    { date: new Date(year, 9, 29), name: "Cumhuriyet Bayramı", type: "MILLI_BAYRAM" },
-  ];
-
-  // Dini bayramlar (yaklaşık tarihler — her yıl güncellenmeli)
-  if (year === 2025) {
-    // Ramazan Bayramı 2025: 30 Mart - 1 Nisan
-    holidays.push(
-      { date: new Date(2025, 2, 30), name: "Ramazan Bayramı 1. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2025, 2, 31), name: "Ramazan Bayramı 2. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2025, 3, 1), name: "Ramazan Bayramı 3. Gün", type: "DINI_BAYRAM" },
-    );
-    // Kurban Bayramı 2025: 6-9 Haziran
-    holidays.push(
-      { date: new Date(2025, 5, 6), name: "Kurban Bayramı 1. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2025, 5, 7), name: "Kurban Bayramı 2. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2025, 5, 8), name: "Kurban Bayramı 3. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2025, 5, 9), name: "Kurban Bayramı 4. Gün", type: "DINI_BAYRAM" },
-    );
-  } else if (year === 2026) {
-    // Ramazan Bayramı 2026: 20-22 Mart (yaklaşık)
-    holidays.push(
-      { date: new Date(2026, 2, 20), name: "Ramazan Bayramı 1. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2026, 2, 21), name: "Ramazan Bayramı 2. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2026, 2, 22), name: "Ramazan Bayramı 3. Gün", type: "DINI_BAYRAM" },
-    );
-    // Kurban Bayramı 2026: 27-30 Mayıs (yaklaşık)
-    holidays.push(
-      { date: new Date(2026, 4, 27), name: "Kurban Bayramı 1. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2026, 4, 28), name: "Kurban Bayramı 2. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2026, 4, 29), name: "Kurban Bayramı 3. Gün", type: "DINI_BAYRAM" },
-      { date: new Date(2026, 4, 30), name: "Kurban Bayramı 4. Gün", type: "DINI_BAYRAM" },
-    );
-  } else {
-    // Fallback: approximate dates shifted ~10 days earlier per year
-    const baseRamazan = new Date(2026, 2, 20);
-    const baseKurban = new Date(2026, 4, 27);
-    const yearDiff = year - 2026;
-    const shiftDays = yearDiff * -11; // Hicri takvim ~11 gün erken
-
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(baseRamazan);
-      d.setFullYear(year);
-      d.setDate(d.getDate() + shiftDays + i);
-      holidays.push({ date: d, name: `Ramazan Bayramı ${i + 1}. Gün`, type: "DINI_BAYRAM" });
-    }
-    for (let i = 0; i < 4; i++) {
-      const d = new Date(baseKurban);
-      d.setFullYear(year);
-      d.setDate(d.getDate() + shiftDays + i);
-      holidays.push({ date: d, name: `Kurban Bayramı ${i + 1}. Gün`, type: "DINI_BAYRAM" });
-    }
+async function getOfficialHolidays(year: number): Promise<Holiday[]> {
+  try {
+    const apiHolidays = await fetchHolidaysFromApi(year);
+    return apiHolidays.map((h) => ({
+      date: new Date(h.date),
+      name: h.name,
+      type: h.type,
+    }));
+  } catch (err) {
+    console.warn(`Tatil API'si başarısız (${year}), sabit tatiller kullanılıyor:`, err);
+    // Fallback: only fixed national holidays (no religious dates without API)
+    return [
+      { date: new Date(year, 0, 1), name: "Yılbaşı", type: "RESMI_TATIL" },
+      { date: new Date(year, 3, 23), name: "Ulusal Egemenlik ve Çocuk Bayramı", type: "MILLI_BAYRAM" },
+      { date: new Date(year, 4, 1), name: "Emek ve Dayanışma Günü", type: "RESMI_TATIL" },
+      { date: new Date(year, 4, 19), name: "Atatürk'ü Anma, Gençlik ve Spor Bayramı", type: "MILLI_BAYRAM" },
+      { date: new Date(year, 6, 15), name: "Demokrasi ve Millî Birlik Günü", type: "MILLI_BAYRAM" },
+      { date: new Date(year, 7, 30), name: "Zafer Bayramı", type: "MILLI_BAYRAM" },
+      { date: new Date(year, 9, 28), name: "Cumhuriyet Bayramı (Yarım gün)", type: "MILLI_BAYRAM" },
+      { date: new Date(year, 9, 29), name: "Cumhuriyet Bayramı", type: "MILLI_BAYRAM" },
+    ];
   }
-
-  return holidays;
 }
 
 // ─── Minimum Days by Procedure (4734 Madde 13) ──────────────
@@ -193,7 +155,7 @@ function getMinimumDays(
 
 // ─── Core Calculator ────────────────────────────────────────
 
-export function calculateDeadline(input: DeadlineInput): DeadlineResult {
+export async function calculateDeadline(input: DeadlineInput): Promise<DeadlineResult> {
   const announcementDate = new Date(input.announcementDate);
   const { days: minimumDays, legalBasis, explanation } = getMinimumDays(
     input.procedureType,
@@ -201,11 +163,11 @@ export function calculateDeadline(input: DeadlineInput): DeadlineResult {
     input.aboveThreshold,
   );
 
-  // Collect holidays for the relevant year(s)
+  // Collect holidays for the relevant year(s) from API
   const year = announcementDate.getFullYear();
   const allHolidays = [
-    ...getOfficialHolidays(year),
-    ...getOfficialHolidays(year + 1),
+    ...(await getOfficialHolidays(year)),
+    ...(await getOfficialHolidays(year + 1)),
   ];
 
   // Calculate submission deadline
@@ -296,16 +258,16 @@ function countWorkingDays(start: Date, end: Date, holidays: Holiday[]): number {
 
 // ─── Next working day from today ────────────────────────────
 
-export function getNextWorkingDay(from?: Date): Date {
+export async function getNextWorkingDay(from?: Date): Promise<Date> {
   const date = from ? new Date(from) : new Date();
   date.setDate(date.getDate() + 1);
-  const holidays = getOfficialHolidays(date.getFullYear());
+  const holidays = await getOfficialHolidays(date.getFullYear());
   return adjustToWorkingDay(date, holidays);
 }
 
 // ─── Get holidays for a date range ──────────────────────────
 
-export function getHolidaysInRange(startStr: string, endStr: string): Holiday[] {
+export async function getHolidaysInRange(startStr: string, endStr: string): Promise<Holiday[]> {
   const start = new Date(startStr);
   const end = new Date(endStr);
   const years = new Set<number>();
@@ -318,7 +280,7 @@ export function getHolidaysInRange(startStr: string, endStr: string): Holiday[] 
 
   const allHolidays: Holiday[] = [];
   for (const y of years) {
-    allHolidays.push(...getOfficialHolidays(y));
+    allHolidays.push(...(await getOfficialHolidays(y)));
   }
 
   return allHolidays.filter((h) => h.date >= start && h.date <= end);
@@ -326,11 +288,11 @@ export function getHolidaysInRange(startStr: string, endStr: string): Holiday[] 
 
 // ─── Commonly used deadline scenarios ───────────────────────
 
-export function getCommonScenarios(announcementDate: string) {
+export async function getCommonScenarios(announcementDate: string) {
   const scenarios = [
     {
       label: "Açık İhale — Yapım (eşik üstü)",
-      result: calculateDeadline({
+      result: await calculateDeadline({
         announcementDate,
         procedureType: "ACIK_IHALE",
         tenderType: "YAPIM",
@@ -339,7 +301,7 @@ export function getCommonScenarios(announcementDate: string) {
     },
     {
       label: "Açık İhale — Yapım (eşik altı)",
-      result: calculateDeadline({
+      result: await calculateDeadline({
         announcementDate,
         procedureType: "ACIK_IHALE",
         tenderType: "YAPIM",
@@ -348,7 +310,7 @@ export function getCommonScenarios(announcementDate: string) {
     },
     {
       label: "Açık İhale — Mal/Hizmet (eşik üstü)",
-      result: calculateDeadline({
+      result: await calculateDeadline({
         announcementDate,
         procedureType: "ACIK_IHALE",
         tenderType: "MAL_ALIMI",
@@ -357,7 +319,7 @@ export function getCommonScenarios(announcementDate: string) {
     },
     {
       label: "Açık İhale — Mal/Hizmet (eşik altı)",
-      result: calculateDeadline({
+      result: await calculateDeadline({
         announcementDate,
         procedureType: "ACIK_IHALE",
         tenderType: "MAL_ALIMI",
@@ -366,7 +328,7 @@ export function getCommonScenarios(announcementDate: string) {
     },
     {
       label: "Pazarlık Usulü",
-      result: calculateDeadline({
+      result: await calculateDeadline({
         announcementDate,
         procedureType: "PAZARLIK",
         tenderType: "HIZMET",

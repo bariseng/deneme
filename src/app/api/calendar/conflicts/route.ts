@@ -1,12 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { detectConflicts } from "@/lib/calendar-engine";
+import { detectAllConflicts } from "@/lib/services/conflict-detector";
 
-export async function GET() {
+/**
+ * GET /api/calendar/conflicts
+ * Enhanced conflict detection with recommendations
+ */
+export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
-    const conflicts = await detectConflicts(user.id);
-    return NextResponse.json(conflicts);
+    const daysParam = request.nextUrl.searchParams.get("days");
+    const days = daysParam ? parseInt(daysParam, 10) : 30;
+
+    const summary = await detectAllConflicts(user.id, days);
+    return NextResponse.json(summary);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Hata";
     if (msg === "UNAUTHORIZED") return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });

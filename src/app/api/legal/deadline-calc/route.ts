@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     // Return common scenarios for a given date
     if (action === "scenarios") {
       const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
-      const scenarios = getCommonScenarios(date);
+      const scenarios = await getCommonScenarios(date);
       return NextResponse.json({ success: true, data: scenarios });
     }
 
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
           { status: 400 },
         );
       }
-      const holidays = getHolidaysInRange(start, end);
+      const holidays = await getHolidaysInRange(start, end);
       return NextResponse.json({ success: true, data: holidays });
     }
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const result = calculateDeadline({
+    const result = await calculateDeadline({
       announcementDate,
       procedureType,
       tenderType,
