@@ -1,93 +1,81 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import {
+  getDashboardKPIs,
+  getMonthlyVolume,
+  getSectorDistribution,
+  getCityHeatmap,
+  getPriceIndexChart,
+  getPerformanceCard,
+} from "@/lib/services/dashboard-metrics";
 
-export const dynamic = "force-dynamic";
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Giriş yapmanız gerekiyor" }, { status: 401 });
     }
 
-    const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(weekStart.getDate() - 7);
+    const { searchParams } = new URL(request.url);
+    const section = searchParams.get("section");
 
-    const [
-      favoriteCount,
-      applicationCount,
-      upcomingDeadlines,
-      newTendersThisWeek,
-      closingThisWeek,
-      recentFavorites,
-      recentApplications,
-      unreadNotifications,
-    ] = await Promise.all([
-      prisma.favorite.count({ where: { userId: user.id } }),
-      prisma.application.count({ where: { userId: user.id } }),
-      prisma.favorite.count({
-        where: {
-          userId: user.id,
-          tender: {
-            deadline: { gte: now, lte: new Date(now.getTime() + 7 * 86400000) },
-          },
-        },
-      }),
-      prisma.tender.count({
-        where: { publishDate: { gte: weekStart } },
-      }),
-      prisma.tender.count({
-        where: {
-          deadline: { gte: now, lte: new Date(now.getTime() + 7 * 86400000) },
-          status: "BASVURU_ACIK",
-        },
-      }),
-      prisma.favorite.findMany({
-        where: { userId: user.id },
-        include: {
-          tender: {
-            select: {
-              id: true, title: true, institution: true, city: true,
-              tenderType: true, status: true, estimatedCost: true, deadline: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      }),
-      prisma.application.findMany({
-        where: { userId: user.id },
-        include: {
-          tender: {
-            select: {
-              id: true, title: true, institution: true, city: true,
-              tenderType: true, deadline: true, estimatedCost: true,
-            },
-          },
-        },
-        orderBy: { updatedAt: "desc" },
-        take: 10,
-      }),
-      prisma.notification.count({
-        where: { userId: user.id, isRead: false },
-      }),
+    // Single section request for lazy loading
+    if (section) {
+      switch (section) {
+        case "kpis":
+          return NextResponse.json({
+            success: true,
+            data: await getDashboardKPIs(user.id, user.companyId),
+          });
+        case "monthly":
+          return NextResponse.json({
+            success: true,
+            data: await getMonthlyVolume(parseInt(searchParams.get("months") || "12")),
+          });
+        case "sectors":
+          return NextResponse.json({
+            success: true,
+            data: await getSectorDistribution(),
+          });
+        case "cities":
+          return NextResponse.json({
+            success: true,
+            data: await getCityHeatmap(),
+          });
+        case "price-index":
+          return NextResponse.json({
+            success: true,
+            data: await getPriceIndexChart(searchParams.get("sector") || undefined),
+          });
+        case "performance":
+          return NextResponse.json({
+            success: true,
+            data: await getPerformanceCard(user.id, user.companyId),
+          });
+        default:
+          return NextResponse.json({ error: "Geçersiz section" }, { status: 400 });
+      }
+    }
+
+    // Full dashboard data (parallel fetch)
+    const [kpis, monthlyVolume, sectors, cities, performance] = await Promise.all([
+      getDashboardKPIs(user.id, user.companyId),
+      getMonthlyVolume(12),
+      getSectorDistribution(),
+      getCityHeatmap(),
+      getPerformanceCard(user.id, user.companyId),
     ]);
 
     return NextResponse.json({
       success: true,
       data: {
-        stats: {
-          favoriteCount,
-          applicationCount,
-          upcomingDeadlines,
-          newTendersThisWeek,
-          closingThisWeek,
-          unreadNotifications,
+        kpis,
+        charts: {
+          monthlyVolume,
+          sectors,
+          cities,
         },
-        recentFavorites,
-        recentApplications,
+        performance,
       },
     });
   } catch (error) {
