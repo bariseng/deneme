@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,7 +17,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useBidStore, calcBidTotal, type BidStatus } from "@/lib/bid-store";
-import { tenders } from "@/lib/data";
+import type { Tender } from "@/lib/data";
+import { mapApiTender } from "@/lib/api-client";
 import { formatCurrency, formatDateTR } from "@/lib/format";
 
 const statusConfig: Record<
@@ -48,6 +49,14 @@ export default function BidListClient() {
   const [statusFilter, setStatusFilter] = useState<BidStatus | "all">("all");
   const [showNewBidModal, setShowNewBidModal] = useState(false);
   const [selectedTenderId, setSelectedTenderId] = useState("");
+  const [availableTenders, setAvailableTenders] = useState<Tender[]>([]);
+
+  useEffect(() => {
+    fetch("/api/tenders?status=BASVURU_ACIK&limit=50&sort=deadline&order=asc")
+      .then((r) => r.json())
+      .then((json) => setAvailableTenders((json.data ?? []).map(mapApiTender)))
+      .catch(() => {});
+  }, []);
 
   const filteredBids = useMemo(() => {
     return bids.filter((b) => {
@@ -65,7 +74,7 @@ export default function BidListClient() {
   }, [bids, search, statusFilter]);
 
   const handleCreateBid = () => {
-    const tender = tenders.find((t) => t.id === selectedTenderId);
+    const tender = availableTenders.find((t) => t.id === selectedTenderId);
     if (!tender) return;
     const bidId = createBid({
       tenderId: tender.id,
@@ -349,18 +358,16 @@ export default function BidListClient() {
                 className="w-full h-10 px-3 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary mb-3"
               >
                 <option value="">-- İhale seçiniz --</option>
-                {tenders
-                  .filter((t) => t.status === "active")
-                  .map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title} ({t.ekapNo})
-                    </option>
-                  ))}
+                {availableTenders.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title} ({t.ekapNo})
+                  </option>
+                ))}
               </select>
               {selectedTenderId && (
                 <div className="bg-blue-50 rounded-lg p-3 text-sm">
                   {(() => {
-                    const t = tenders.find(
+                    const t = availableTenders.find(
                       (t) => t.id === selectedTenderId
                     );
                     if (!t) return null;

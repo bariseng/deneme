@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -9,7 +9,8 @@ import {
   Clock,
   MapPin,
 } from "lucide-react";
-import { tenders } from "@/lib/data";
+import type { Tender } from "@/lib/data";
+import { mapApiTender } from "@/lib/api-client";
 import { useUserStore } from "@/lib/store";
 import { EmptyState } from "./DashboardClient";
 
@@ -22,14 +23,26 @@ export default function DeadlineCalendar() {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
+  const [allTenders, setAllTenders] = useState<Tender[]>([]);
+
+  // Fetch upcoming tenders sorted by deadline
+  useEffect(() => {
+    fetch("/api/tenders?sort=deadline&order=asc&limit=50&status=BASVURU_ACIK")
+      .then((r) => r.json())
+      .then((json) => {
+        const items = (json.data ?? []).map(mapApiTender);
+        setAllTenders(items);
+      })
+      .catch(() => setAllTenders([]));
+  }, []);
 
   const days = range === "7" ? 7 : 30;
   const now = Date.now();
 
-  // Upcoming deadlines in range
+  // Upcoming deadlines in range (from fetched tenders, filtered by followed)
   const upcoming = useMemo(() => {
     const maxMs = days * 24 * 60 * 60 * 1000;
-    return tenders
+    return allTenders
       .filter((t) => {
         const dl = new Date(t.deadline).getTime();
         return (
@@ -43,7 +56,7 @@ export default function DeadlineCalendar() {
         (a, b) =>
           new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
       );
-  }, [followedTenderIds, days, now]);
+  }, [followedTenderIds, days, now, allTenders]);
 
   // Group by date for the timeline
   const grouped = useMemo(() => {

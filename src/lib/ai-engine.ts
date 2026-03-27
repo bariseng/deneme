@@ -1,5 +1,4 @@
-import { tenders, type Tender, categories } from "./data";
-import { companies } from "./companies";
+import { type Tender, categories } from "./data";
 import { formatCurrency } from "./format";
 
 /* ── Types ─────────────────────────────────────── */
@@ -210,11 +209,13 @@ export async function summarizeDocument(
 export async function matchTendersForCompany(
   companySectors: string[],
   companyCity: string,
-  maxBudget: number
+  maxBudget: number,
+  activeTenders?: Tender[]
 ): Promise<AIMatchedTender[]> {
   await delay(700 + Math.random() * 500);
 
-  const scored = tenders
+  const source = activeTenders ?? [];
+  const scored = source
     .filter((t) => t.status === "active")
     .map((t) => {
       let score = 0;

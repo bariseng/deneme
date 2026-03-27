@@ -1,31 +1,35 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Heart, CalendarClock, TrendingDown, Sparkles } from "lucide-react";
-import { tenders } from "@/lib/data";
 import { useUserStore } from "@/lib/store";
+
+interface KpiData {
+  closingThisWeek: number;
+  newThisWeek: number;
+}
 
 export default function SummaryCards() {
   const { followedTenderIds, applications } = useUserStore();
+  const [kpi, setKpi] = useState<KpiData>({ closingThisWeek: 0, newThisWeek: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/dashboard?section=kpis")
+      .then((r) => r.json())
+      .then((json) => {
+        const data = json.data ?? json;
+        setKpi({
+          closingThisWeek: data.closingThisWeek ?? 0,
+          newThisWeek: data.newThisWeek ?? 0,
+        });
+      })
+      .catch(() => setKpi({ closingThisWeek: 0, newThisWeek: 0 }))
+      .finally(() => setLoading(false));
+  }, []);
 
   const stats = useMemo(() => {
-    const now = Date.now();
-    const oneWeek = 7 * 24 * 60 * 60 * 1000;
-
     const followed = followedTenderIds.length;
-
-    const closingThisWeek = tenders.filter(
-      (t) =>
-        followedTenderIds.includes(t.id) &&
-        t.status === "active" &&
-        new Date(t.deadline).getTime() - now > 0 &&
-        new Date(t.deadline).getTime() - now <= oneWeek
-    ).length;
-
-    const newThisWeek = tenders.filter(
-      (t) => now - new Date(t.publishDate).getTime() <= oneWeek
-    ).length;
-
     const pendingApps = applications.filter(
       (a) => a.status === "pending"
     ).length;
@@ -40,14 +44,14 @@ export default function SummaryCards() {
       },
       {
         label: "Bu Hafta Kapanan",
-        value: closingThisWeek,
+        value: loading ? "..." : kpi.closingThisWeek,
         icon: CalendarClock,
         color: "text-secondary",
         bg: "bg-orange-50",
       },
       {
         label: "Yeni Eklenen (7 Gün)",
-        value: newThisWeek,
+        value: loading ? "..." : kpi.newThisWeek,
         icon: Sparkles,
         color: "text-accent",
         bg: "bg-emerald-50",
@@ -60,7 +64,7 @@ export default function SummaryCards() {
         bg: "bg-blue-50",
       },
     ];
-  }, [followedTenderIds, applications]);
+  }, [followedTenderIds, applications, kpi, loading]);
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

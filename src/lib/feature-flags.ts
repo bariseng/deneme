@@ -23,19 +23,19 @@ const FLAG_CONFIGS: Record<FeatureFlag, FlagConfig> = {
   USE_REAL_EKAP_DATA: {
     name: "USE_REAL_EKAP_DATA",
     description: "EKAP API'den gerçek ihale verisi kullan",
-    defaultValue: false,
+    defaultValue: true,
     rolloutPercentage: 100,
   },
   USE_REAL_TED_DATA: {
     name: "USE_REAL_TED_DATA",
     description: "TED API'den uluslararası ihale verisi kullan",
-    defaultValue: false,
+    defaultValue: true,
     rolloutPercentage: 100,
   },
   USE_REAL_PRICE_INDEX: {
     name: "USE_REAL_PRICE_INDEX",
     description: "Gerçek fiyat endeksi verisi kullan",
-    defaultValue: false,
+    defaultValue: true,
     rolloutPercentage: 100,
   },
   USE_REAL_PAYMENTS: {
@@ -47,13 +47,13 @@ const FLAG_CONFIGS: Record<FeatureFlag, FlagConfig> = {
   USE_REAL_COMPANY_DATA: {
     name: "USE_REAL_COMPANY_DATA",
     description: "MERSİS/KAP'tan gerçek firma verisi kullan",
-    defaultValue: false,
+    defaultValue: true,
     rolloutPercentage: 100,
   },
   USE_REAL_LEGAL_DATA: {
     name: "USE_REAL_LEGAL_DATA",
     description: "mevzuat.gov.tr'den gerçek mevzuat verisi kullan",
-    defaultValue: false,
+    defaultValue: true,
     rolloutPercentage: 100,
   },
 };

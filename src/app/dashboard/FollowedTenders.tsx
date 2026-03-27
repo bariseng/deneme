@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Heart,
@@ -12,21 +12,50 @@ import {
   Tag,
   Hash,
 } from "lucide-react";
-import { tenders, type Tender } from "@/lib/data";
+import type { Tender } from "@/lib/data";
+import { mapApiTender } from "@/lib/api-client";
 import { useUserStore } from "@/lib/store";
 import { EmptyState } from "./DashboardClient";
 
 export default function FollowedTenders() {
   const { followedTenderIds, toggleFollow } = useUserStore();
   const [filter, setFilter] = useState<"all" | "active" | "closed">("all");
+  const [fetchedTenders, setFetchedTenders] = useState<Tender[]>([]);
+
+  // Fetch followed tenders from API
+  useEffect(() => {
+    if (followedTenderIds.length === 0) {
+      setFetchedTenders([]);
+      return;
+    }
+    fetch("/api/favorites")
+      .then((r) => r.json())
+      .then((json) => {
+        const items = json.data ?? [];
+        const mapped = items
+          .filter((item: Record<string, unknown>) => item.tender)
+          .map((item: Record<string, unknown>) => mapApiTender(item.tender as Record<string, unknown>));
+        // Fallback: if API returns empty, fetch all and filter client-side
+        if (mapped.length === 0) {
+          return fetch(`/api/tenders?limit=100`)
+            .then((r2) => r2.json())
+            .then((json2) => {
+              const all = (json2.data ?? []).map(mapApiTender);
+              setFetchedTenders(all.filter((t: Tender) => followedTenderIds.includes(t.id)));
+            });
+        }
+        setFetchedTenders(mapped);
+      })
+      .catch(() => setFetchedTenders([]));
+  }, [followedTenderIds]);
 
   const followed = useMemo(() => {
-    const list = tenders.filter((t) =>
+    const list = fetchedTenders.filter((t) =>
       followedTenderIds.includes(t.id)
     );
     if (filter === "all") return list;
     return list.filter((t) => t.status === filter);
-  }, [followedTenderIds, filter]);
+  }, [followedTenderIds, filter, fetchedTenders]);
 
   return (
     <div className="space-y-4">

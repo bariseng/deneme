@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Sparkles,
@@ -28,8 +28,9 @@ import {
   type AIPriceEstimate,
   type AITrendAlert,
 } from "@/lib/ai-engine";
-import { tenders } from "@/lib/data";
-import { companies } from "@/lib/companies";
+import type { Tender } from "@/lib/data";
+import type { Company } from "@/lib/companies";
+import { mapApiTender } from "@/lib/api-client";
 import { formatCurrency, formatDateTR } from "@/lib/format";
 
 type Tab = "matching" | "pricing" | "trends";
@@ -42,6 +43,18 @@ const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
 
 export default function AIFeaturesClient() {
   const [activeTab, setActiveTab] = useState<Tab>("matching");
+  const [tenders, setTenders] = useState<Tender[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/tenders?limit=20&sort=publishDate&order=desc").then((r) => r.json()),
+      fetch("/api/integrations/kap?action=search&q=").then((r) => r.json()).catch(() => ({ results: [] })),
+    ]).then(([tendersJson, companiesJson]) => {
+      setTenders((tendersJson.data ?? []).map(mapApiTender));
+      setCompanies(companiesJson.results ?? []);
+    });
+  }, []);
 
   return (
     <div className="bg-background-alt min-h-screen">
@@ -129,8 +142,8 @@ export default function AIFeaturesClient() {
           })}
         </div>
 
-        {activeTab === "matching" && <MatchingTab />}
-        {activeTab === "pricing" && <PricingTab />}
+        {activeTab === "matching" && <MatchingTab companies={companies} />}
+        {activeTab === "pricing" && <PricingTab tenders={tenders} />}
         {activeTab === "trends" && <TrendsTab />}
       </div>
     </div>
@@ -139,8 +152,8 @@ export default function AIFeaturesClient() {
 
 /* ── Matching Tab ──────────────────────────────── */
 
-function MatchingTab() {
-  const [selectedCompany, setSelectedCompany] = useState(companies[0].id);
+function MatchingTab({ companies }: { companies: Company[] }) {
+  const [selectedCompany, setSelectedCompany] = useState(companies[0]?.id ?? "");
   const [results, setResults] = useState<AIMatchedTender[] | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -293,7 +306,7 @@ function MatchScoreBadge({ score }: { score: number }) {
 
 /* ── Pricing Tab ───────────────────────────────── */
 
-function PricingTab() {
+function PricingTab({ tenders }: { tenders: Tender[] }) {
   const [selectedTender, setSelectedTender] = useState("");
   const [estimate, setEstimate] = useState<AIPriceEstimate | null>(null);
   const [loading, setLoading] = useState(false);

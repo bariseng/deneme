@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Heart,
@@ -15,8 +15,9 @@ import {
   Settings,
   LayoutDashboard,
 } from "lucide-react";
-import { tenders } from "@/lib/data";
 import { useUserStore } from "@/lib/store";
+import type { Tender } from "@/lib/data";
+import { mapApiTender } from "@/lib/api-client";
 import SummaryCards from "./SummaryCards";
 import FollowedTenders from "./FollowedTenders";
 import AppliedTenders from "./AppliedTenders";
@@ -94,10 +95,21 @@ export default function DashboardClient() {
 
 function OverviewTab() {
   const { followedTenderIds, applications } = useUserStore();
+  const [fetchedTenders, setFetchedTenders] = useState<Tender[]>([]);
+
+  useEffect(() => {
+    fetch("/api/tenders?sort=deadline&order=asc&limit=50&status=BASVURU_ACIK")
+      .then((r) => r.json())
+      .then((json) => {
+        const items = (json.data ?? []).map(mapApiTender);
+        setFetchedTenders(items);
+      })
+      .catch(() => setFetchedTenders([]));
+  }, []);
 
   const followedTenders = useMemo(
-    () => tenders.filter((t) => followedTenderIds.includes(t.id)),
-    [followedTenderIds]
+    () => fetchedTenders.filter((t: Tender) => followedTenderIds.includes(t.id)),
+    [followedTenderIds, fetchedTenders]
   );
 
   const upcomingDeadlines = useMemo(() => {
@@ -213,7 +225,7 @@ function OverviewTab() {
           {recentApplications.length > 0 ? (
             <ul className="space-y-3">
               {recentApplications.map((app) => {
-                const tender = tenders.find((t) => t.id === app.tenderId);
+                const tender = fetchedTenders.find((t: Tender) => t.id === app.tenderId);
                 if (!tender) return null;
                 return (
                   <li key={app.tenderId}>

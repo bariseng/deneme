@@ -1,4 +1,4 @@
-import { tenders, categories } from "./data";
+import { categories } from "./data";
 
 /* ── Types ─────────────────────────────────────── */
 
@@ -141,10 +141,8 @@ export function generateSectorStats(): SectorStat[] {
   const rand = seededRandom(123);
 
   return categories.map((cat) => {
-    const realTenders = tenders.filter((t) => t.category === cat.name);
-    const count = realTenders.length + Math.round(rand() * 80 + 20);
-    const totalBudget = realTenders.reduce((s, t) => s + t.estimatedCostValue, 0) +
-      Math.round(rand() * 5_000_000_000 + 500_000_000);
+    const count = Math.round(rand() * 80 + 20);
+    const totalBudget = Math.round(rand() * 5_000_000_000 + 500_000_000);
     return {
       sector: cat.name,
       count,
@@ -167,8 +165,7 @@ const topCities = [
 export function generateCityStats(): CityStat[] {
   const rand = seededRandom(77);
   const stats = topCities.map((city) => {
-    const realCount = tenders.filter((t) => t.city === city).length;
-    const count = realCount + Math.round(rand() * 40 + 5);
+    const count = Math.round(rand() * 40 + 5);
     const totalBudget = count * (rand() * 20_000_000 + 5_000_000);
     return {
       city,
@@ -231,16 +228,8 @@ export function generateTopSearchTerms(): TopSearchTerm[] {
 /* ── Top viewed tenders ──────────────────────── */
 
 export function generateTopViewedTenders(): TopViewedTender[] {
-  const rand = seededRandom(99);
-  return tenders
-    .slice(0, 10)
-    .map((t) => ({
-      tenderId: t.id,
-      title: t.title,
-      views: Math.round(500 + rand() * 5000),
-      institution: t.institution,
-    }))
-    .sort((a, b) => b.views - a.views);
+  // Placeholder — dashboard API (/api/dashboard, /api/stats/*) provides real data
+  return [];
 }
 
 /* ── Period comparison ───────────────────────── */

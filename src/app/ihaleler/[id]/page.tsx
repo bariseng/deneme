@@ -20,8 +20,10 @@ import SimilarTenders from "./SimilarTenders";
 import TenderMap from "./TenderMap";
 import ShareButtons from "./ShareButtons";
 import AIAnalysis from "./AIAnalysis";
-import { tenders } from "@/lib/data";
+import { fetchTenderById } from "@/lib/api-client";
 import { notFound } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -31,7 +33,7 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const tender = tenders.find((t) => t.id === id);
+  const tender = await fetchTenderById(id);
   if (!tender) return { title: "İhale Bulunamadı" };
   return {
     title: tender.title,
@@ -41,10 +43,6 @@ export async function generateMetadata({
       description: tender.description,
     },
   };
-}
-
-export function generateStaticParams() {
-  return tenders.map((t) => ({ id: t.id }));
 }
 
 const docCategoryLabels: Record<string, string> = {
@@ -63,7 +61,7 @@ const docCategoryIcons: Record<string, string> = {
 
 export default async function TenderDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const tender = tenders.find((t) => t.id === id);
+  const tender = await fetchTenderById(id);
 
   if (!tender) {
     notFound();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   FileCheck,
@@ -10,7 +10,8 @@ import {
   MapPin,
   Search,
 } from "lucide-react";
-import { tenders } from "@/lib/data";
+import type { Tender } from "@/lib/data";
+import { mapApiTender } from "@/lib/api-client";
 import {
   useUserStore,
   type ApplicationStatus,
@@ -26,18 +27,57 @@ export default function AppliedTenders() {
   const [statusFilter, setStatusFilter] = useState<
     "all" | ApplicationStatus
   >("all");
+  const [tenderMap, setTenderMap] = useState<Map<string, Tender>>(new Map());
+  const [loading, setLoading] = useState(true);
+
+  // Fetch tender details for all application tenderIds
+  useEffect(() => {
+    const ids = applications.map((a) => a.tenderId);
+    if (ids.length === 0) {
+      setLoading(false);
+      return;
+    }
+    fetch(`/api/applications`)
+      .then((r) => r.json())
+      .then((json) => {
+        const items = json.data ?? [];
+        const map = new Map<string, Tender>();
+        for (const item of items) {
+          if (item.tender) {
+            map.set(item.tender.id, mapApiTender(item.tender));
+          }
+        }
+        // Fallback: fetch tenders individually if API doesn't include tender details
+        if (map.size === 0 && ids.length > 0) {
+          const sp = new URLSearchParams();
+          sp.set("limit", "100");
+          return fetch(`/api/tenders?${sp}`)
+            .then((r2) => r2.json())
+            .then((json2) => {
+              const tenders = json2.data ?? [];
+              for (const t of tenders) {
+                map.set(t.id, mapApiTender(t));
+              }
+              setTenderMap(map);
+            });
+        }
+        setTenderMap(map);
+      })
+      .catch(() => setTenderMap(new Map()))
+      .finally(() => setLoading(false));
+  }, [applications]);
 
   const filtered = useMemo(() => {
     const enriched = applications
       .map((app) => ({
         ...app,
-        tender: tenders.find((t) => t.id === app.tenderId),
+        tender: tenderMap.get(app.tenderId),
       }))
       .filter((a) => a.tender);
 
     if (statusFilter === "all") return enriched;
     return enriched.filter((a) => a.status === statusFilter);
-  }, [applications, statusFilter]);
+  }, [applications, statusFilter, tenderMap]);
 
   const sorted = useMemo(
     () =>

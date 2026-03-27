@@ -1,7 +1,8 @@
-// ─── AI Provider (Claude + OpenAI fallback) ─────────────────
-// Claude API as primary, OpenAI as fallback + embeddings
+// ─── AI Provider (Gemini primary → Claude → OpenAI fallback) ─
+// Gemini/Vertex AI as primary, Claude as secondary, OpenAI as fallback + embeddings
 // Streaming support via ReadableStream
 
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { ProviderCache } from "./cache";
@@ -33,6 +34,7 @@ export interface AiStreamCallbacks {
 
 // ─── Config ─────────────────────────────────────────────────
 
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 const CLAUDE_MODEL = process.env.AI_MODEL || "claude-sonnet-4-20250514";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const EMBEDDING_MODEL = "text-embedding-3-small";
@@ -40,6 +42,12 @@ const EMBEDDING_MODEL = "text-embedding-3-small";
 const cache = new ProviderCache();
 
 // ─── Clients ────────────────────────────────────────────────
+
+function getGeminiClient(): GoogleGenerativeAI {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY tanımlanmalı");
+  return new GoogleGenerativeAI(apiKey);
+}
 
 function getClaudeClient(): Anthropic {
   const apiKey = process.env.CLAUDE_API_KEY;
@@ -53,6 +61,18 @@ function getOpenAIClient(): OpenAI {
   return new OpenAI({ apiKey });
 }
 
+function hasGeminiKey(): boolean {
+  return !!process.env.GEMINI_API_KEY;
+}
+
+function hasClaudeKey(): boolean {
+  return !!process.env.CLAUDE_API_KEY;
+}
+
+function hasOpenAIKey(): boolean {
+  return !!process.env.OPENAI_API_KEY;
+}
+
 // ─── Completion (non-streaming) ─────────────────────────────
 
 export async function complete(params: AiCompletionParams): Promise<AiCompletionResult> {
@@ -62,13 +82,38 @@ export async function complete(params: AiCompletionParams): Promise<AiCompletion
     if (cached) return { ...cached, cached: true };
   }
 
-  // Try Claude first, fallback to OpenAI
+  // Try Gemini → Claude → OpenAI (based on available keys)
   let result: AiCompletionResult;
   try {
-    result = await claudeComplete(params);
-  } catch (claudeError) {
-    console.warn("Claude API failed, falling back to OpenAI:", claudeError);
-    result = await openaiComplete(params);
+    if (hasGeminiKey()) {
+      result = await geminiComplete(params);
+    } else if (hasClaudeKey()) {
+      result = await claudeComplete(params);
+    } else if (hasOpenAIKey()) {
+      result = await openaiComplete(params);
+    } else {
+      throw new Error("AI API key tanımlı değil. GEMINI_API_KEY, CLAUDE_API_KEY veya OPENAI_API_KEY gerekli.");
+    }
+  } catch (primaryError) {
+    console.warn("Primary AI failed, trying fallbacks:", primaryError);
+    // Fallback chain
+    try {
+      if (hasClaudeKey() && !hasGeminiKey()) {
+        result = await claudeComplete(params);
+      } else if (hasClaudeKey()) {
+        result = await claudeComplete(params);
+      } else if (hasOpenAIKey()) {
+        result = await openaiComplete(params);
+      } else {
+        throw primaryError;
+      }
+    } catch (fallbackError) {
+      if (hasOpenAIKey()) {
+        result = await openaiComplete(params);
+      } else {
+        throw fallbackError;
+      }
+    }
   }
 
   // Store in cache
@@ -89,38 +134,54 @@ export async function complete(params: AiCompletionParams): Promise<AiCompletion
 export function streamComplete(params: AiCompletionParams): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
+  const streamCallbacks = (controller: ReadableStreamDefaultController<Uint8Array>): AiStreamCallbacks => ({
+    onToken: (token) => {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
+    },
+    onDone: (meta) => {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, ...meta })}\n\n`));
+      controller.close();
+    },
+    onError: (err) => {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: err.message })}\n\n`));
+      controller.close();
+    },
+  });
+
   return new ReadableStream({
     async start(controller) {
+      const cbs = streamCallbacks(controller);
       try {
-        await claudeStream(params, {
-          onToken: (token) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
-          },
-          onDone: (meta) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, ...meta })}\n\n`));
-            controller.close();
-          },
-          onError: (error) => {
-            // Fallback to OpenAI streaming
-            openaiStream(params, {
-              onToken: (token) => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
-              },
-              onDone: (meta) => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, ...meta })}\n\n`));
-                controller.close();
-              },
-              onError: (err) => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: err.message })}\n\n`));
-                controller.close();
-              },
-            });
-          },
-        });
+        if (hasGeminiKey()) {
+          await geminiStream(params, cbs);
+        } else if (hasClaudeKey()) {
+          await claudeStream(params, cbs);
+        } else if (hasOpenAIKey()) {
+          await openaiStream(params, cbs);
+        } else {
+          cbs.onError(new Error("AI API key tanımlı değil"));
+        }
       } catch (error) {
-        const msg = error instanceof Error ? error.message : "AI hatası";
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
-        controller.close();
+        // Fallback chain for streaming
+        try {
+          if (hasClaudeKey()) {
+            await claudeStream(params, cbs);
+          } else if (hasOpenAIKey()) {
+            await openaiStream(params, cbs);
+          } else {
+            cbs.onError(error instanceof Error ? error : new Error("AI hatası"));
+          }
+        } catch (fallbackError) {
+          try {
+            if (hasOpenAIKey()) {
+              await openaiStream(params, cbs);
+            } else {
+              cbs.onError(fallbackError instanceof Error ? fallbackError : new Error("AI hatası"));
+            }
+          } catch (lastError) {
+            cbs.onError(lastError instanceof Error ? lastError : new Error("AI hatası"));
+          }
+        }
       }
     },
   });
@@ -133,28 +194,50 @@ export async function createEmbedding(text: string): Promise<number[]> {
   const cached = await cache.get<number[]>(cacheKey);
   if (cached) return cached;
 
-  const openai = getOpenAIClient();
-  const response = await openai.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: text.substring(0, 8000),
-  });
+  let embedding: number[];
 
-  const embedding = response.data[0].embedding;
+  if (hasOpenAIKey()) {
+    const openai = getOpenAIClient();
+    const response = await openai.embeddings.create({
+      model: EMBEDDING_MODEL,
+      input: text.substring(0, 8000),
+    });
+    embedding = response.data[0].embedding;
+  } else if (hasGeminiKey()) {
+    const genAI = getGeminiClient();
+    const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+    const result = await model.embedContent(text.substring(0, 8000));
+    embedding = result.embedding.values;
+  } else {
+    throw new Error("Embedding için OPENAI_API_KEY veya GEMINI_API_KEY gerekli");
+  }
 
   await cache.set(cacheKey, embedding, { ttl: 86400, staleWhileRevalidate: true, key: "embed" }, "AI");
   return embedding;
 }
 
 export async function createBatchEmbeddings(texts: string[]): Promise<number[][]> {
-  const openai = getOpenAIClient();
   const trimmed = texts.map((t) => t.substring(0, 8000));
 
-  const response = await openai.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: trimmed,
-  });
+  if (hasOpenAIKey()) {
+    const openai = getOpenAIClient();
+    const response = await openai.embeddings.create({
+      model: EMBEDDING_MODEL,
+      input: trimmed,
+    });
+    return response.data.map((d) => d.embedding);
+  }
 
-  return response.data.map((d) => d.embedding);
+  if (hasGeminiKey()) {
+    const genAI = getGeminiClient();
+    const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+    const results = await Promise.all(
+      trimmed.map((t) => model.embedContent(t)),
+    );
+    return results.map((r) => r.embedding.values);
+  }
+
+  throw new Error("Embedding için OPENAI_API_KEY veya GEMINI_API_KEY gerekli");
 }
 
 // ─── Cosine Similarity ─────────────────────────────────────
@@ -174,6 +257,63 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 
   const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
   return magnitude === 0 ? 0 : dotProduct / magnitude;
+}
+
+// ─── Gemini Implementation ──────────────────────────────────
+
+async function geminiComplete(params: AiCompletionParams): Promise<AiCompletionResult> {
+  const genAI = getGeminiClient();
+  const model = genAI.getGenerativeModel({
+    model: GEMINI_MODEL,
+    systemInstruction: params.systemPrompt || SYSTEM_PROMPT,
+    generationConfig: {
+      maxOutputTokens: params.maxTokens || 2048,
+      temperature: params.temperature ?? 0.3,
+    },
+  });
+
+  const result = await model.generateContent(params.prompt);
+  const response = result.response;
+  const text = response.text();
+  const usage = response.usageMetadata;
+
+  return {
+    text,
+    model: GEMINI_MODEL,
+    inputTokens: usage?.promptTokenCount || 0,
+    outputTokens: usage?.candidatesTokenCount || 0,
+    cached: false,
+  };
+}
+
+async function geminiStream(params: AiCompletionParams, callbacks: AiStreamCallbacks): Promise<void> {
+  const genAI = getGeminiClient();
+  const model = genAI.getGenerativeModel({
+    model: GEMINI_MODEL,
+    systemInstruction: params.systemPrompt || SYSTEM_PROMPT,
+    generationConfig: {
+      maxOutputTokens: params.maxTokens || 2048,
+      temperature: params.temperature ?? 0.3,
+    },
+  });
+
+  const result = await model.generateContentStream(params.prompt);
+
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  for await (const chunk of result.stream) {
+    const text = chunk.text();
+    if (text) {
+      callbacks.onToken(text);
+    }
+    if (chunk.usageMetadata) {
+      inputTokens = chunk.usageMetadata.promptTokenCount || 0;
+      outputTokens = chunk.usageMetadata.candidatesTokenCount || 0;
+    }
+  }
+
+  callbacks.onDone({ model: GEMINI_MODEL, inputTokens, outputTokens });
 }
 
 // ─── Claude Implementation ──────────────────────────────────

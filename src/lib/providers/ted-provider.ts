@@ -1,4 +1,6 @@
 // ─── TED API v3 Provider — EU Tender Data ───────────────────
+// API docs: https://docs.ted.europa.eu/api/latest/index.html
+// No API key required for search
 
 import { prisma } from "@/lib/prisma";
 import { tedLimiter } from "./rate-limiter";
@@ -87,33 +89,53 @@ function mapCpvToSector(cpvCodes?: string[]): string {
 
 // ─── Config ─────────────────────────────────────────────────
 
-const TED_BASE_URL =
-  process.env.TED_API_URL || "https://api.ted.europa.eu";
+const TED_BASE_URL = "https://api.ted.europa.eu";
 
 const TED_HEADERS: Readonly<Record<string, string>> = {
+  "Content-Type": "application/json",
   Accept: "application/json",
   "User-Agent": "IhalePro/1.0",
 };
 
 const CACHE_TTL_SECONDS = 86400; // 24 hours
 
-// ─── Raw API Response Shapes ────────────────────────────────
+// ─── TED v3 API Response Shapes ─────────────────────────────
 
-// eForms v3 response shape
 interface TedApiNotice {
   "publication-number"?: string;
-  "BT-21-Procedure"?: Record<string, string>; // title per language
-  "BT-09(b)-Procedure"?: string;  // buyer country
-  "BT-131(d)-Lot"?: string[];     // deadlines
-  "BT-27-Lot"?: string[];         // estimated values
+  "notice-title"?: Record<string, string>;
+  "buyer-name"?: Record<string, string[]>;
+  "buyer-country"?: string[];
+  "classification-cpv"?: string[];
+  "publication-date"?: string;
+  "notice-type"?: string;
+  "description-lot"?: Record<string, string[]>;
+  "deadline-receipt-tender-date-lot"?: string[];
+  "estimated-value-lot"?: string[];
   links?: Record<string, Record<string, string>>;
 }
 
 interface TedApiSearchResult {
   notices?: TedApiNotice[];
-  totalCount?: number;
-  total?: number;
+  totalNoticeCount?: number;
+  iterationNextToken?: string;
+  timedOut?: boolean;
 }
+
+// ─── Search fields we request ────────────────────────────────
+
+const SEARCH_FIELDS = [
+  "publication-number",
+  "notice-title",
+  "buyer-name",
+  "buyer-country",
+  "classification-cpv",
+  "publication-date",
+  "notice-type",
+  "description-lot",
+  "deadline-receipt-tender-date-lot",
+  "estimated-value-lot",
+] as const;
 
 // ─── API Response → TedNoticeRaw Mapper ─────────────────────
 
@@ -121,30 +143,52 @@ function mapApiToRaw(item: TedApiNotice): TedNoticeRaw | null {
   const noticeId = item["publication-number"];
   if (!noticeId) return null;
 
-  // Extract title — prefer English, fallback to first available
-  const titleMap = item["BT-21-Procedure"] ?? {};
-  const title = titleMap["eng"] ?? titleMap["ENG"] ?? Object.values(titleMap)[0] ?? "Untitled";
+  // Extract title — prefer English, then Turkish, then first available
+  const titleMap = item["notice-title"] ?? {};
+  const title =
+    titleMap["eng"] ?? titleMap["tur"] ?? Object.values(titleMap)[0] ?? "Untitled";
 
-  // Extract estimated value from array
-  const values = item["BT-27-Lot"] ?? [];
-  const estimatedValue = values.length > 0 ? parseFloat(values[0]) : undefined;
+  // Extract buyer name
+  const buyerMap = item["buyer-name"] ?? {};
+  const buyerArr =
+    buyerMap["eng"] ?? buyerMap["tur"] ?? Object.values(buyerMap)[0];
+  const buyerName = buyerArr?.[0] ?? undefined;
+
+  // Extract buyer country
+  const countries = item["buyer-country"] ?? [];
+  const buyerCountry = countries[0] ?? undefined;
+
+  // Extract CPV codes
+  const cpvCodes = item["classification-cpv"] ?? undefined;
+
+  // Extract estimated value
+  const values = item["estimated-value-lot"] ?? [];
+  const estimatedValue =
+    values.length > 0 ? parseFloat(values[0]) : undefined;
 
   // Extract deadline
-  const deadlines = item["BT-131(d)-Lot"] ?? [];
-  const deadline = deadlines.length > 0 ? deadlines[0] : undefined;
+  const deadlines = item["deadline-receipt-tender-date-lot"] ?? [];
+  const deadline = deadlines[0] ?? undefined;
+
+  // Extract description
+  const descMap = item["description-lot"] ?? {};
+  const descArr =
+    descMap["eng"] ?? descMap["tur"] ?? Object.values(descMap)[0];
+  const description = descArr?.[0]?.substring(0, 5000) ?? undefined;
 
   return {
     noticeId,
     title,
-    buyerCountry: item["BT-09(b)-Procedure"] ?? undefined,
-    estimatedValue: estimatedValue && !isNaN(estimatedValue) ? estimatedValue : undefined,
+    buyerName,
+    buyerCountry,
+    estimatedValue:
+      estimatedValue && !isNaN(estimatedValue) ? estimatedValue : undefined,
     currency: "EUR",
     deadline,
-    publicationDate: undefined,
-    description: undefined,
-    buyerName: undefined,
-    cpvCodes: undefined,
-    noticeType: undefined,
+    cpvCodes,
+    noticeType: item["notice-type"] ?? undefined,
+    publicationDate: item["publication-date"] ?? undefined,
+    description,
   };
 }
 
@@ -160,40 +204,36 @@ class TedProvider {
   // ── Search Notices ──────────────────────────────────────
 
   async searchNotices(params: TedSearchParams): Promise<TedSearchResponse> {
-    const queryParts = this.buildQueryParts(params);
-    const queryString = queryParts.length > 0 ? queryParts.join(" AND ") : "*";
+    const queryString = this.buildQuery(params);
     const page = params.page ?? 1;
-    const pageSize = params.pageSize ?? 50;
+    const pageSize = Math.min(params.pageSize ?? 100, 250);
 
     const cacheKey = `search:${queryString}:${page}:${pageSize}`;
 
     return (await this.cache.get<TedSearchResponse>(cacheKey, async () => {
       await tedLimiter.acquire();
 
-      // TED v3 uses POST with eForms field IDs
       const body = {
         query: queryString,
-        fields: [
-          "BT-21-Procedure",    // title
-          "BT-09(b)-Procedure", // buyer country
-          "BT-131(d)-Lot",      // deadline
-          "BT-27-Lot",          // estimated value
-          "publication-number",
-        ],
-        limit: pageSize,
+        fields: [...SEARCH_FIELDS],
         page,
+        limit: pageSize,
+        paginationMode: "PAGE_NUMBER",
       };
 
       const url = `${TED_BASE_URL}/v3/notices/search`;
       const res = await fetch(url, {
         method: "POST",
-        headers: { ...TED_HEADERS, "Content-Type": "application/json" },
+        headers: TED_HEADERS,
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(15000),
       });
 
       if (!res.ok) {
-        throw new Error(`TED API error: ${res.status} ${res.statusText}`);
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `TED API error: ${res.status} ${res.statusText} — ${text.substring(0, 200)}`,
+        );
       }
 
       const data = (await res.json()) as TedApiSearchResult;
@@ -203,9 +243,52 @@ class TedProvider {
 
       return {
         notices: rawNotices,
-        totalCount: data.totalCount ?? data.total ?? rawNotices.length,
+        totalCount: data.totalNoticeCount ?? rawNotices.length,
       };
     }))!;
+  }
+
+  // ── Sync construction tenders for target countries ─────
+
+  async syncConstructionTenders(
+    daysBack: number = 30,
+  ): Promise<{ inserted: number; updated: number; errors: number }> {
+    const dateFrom = new Date();
+    dateFrom.setDate(dateFrom.getDate() - daysBack);
+    const dateStr = dateFrom.toISOString().split("T")[0].replace(/-/g, "");
+
+    let totalInserted = 0;
+    let totalUpdated = 0;
+    let totalErrors = 0;
+
+    // Fetch construction tenders (CPV 45*) for each target country
+    for (const country of TARGET_COUNTRIES) {
+      try {
+        const result = await this.searchNotices({
+          query: `classification-cpv = 45* AND buyer-country = ${country.code} AND publication-date >= ${dateStr}`,
+          pageSize: 100,
+        });
+
+        if (result.notices.length > 0) {
+          const upsertResult = await this.batchUpsert(result.notices);
+          totalInserted += upsertResult.inserted;
+          totalUpdated += upsertResult.updated;
+          totalErrors += upsertResult.errors;
+        }
+      } catch (err) {
+        console.error(
+          `[TED] Failed to sync ${country.code}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+        totalErrors++;
+      }
+    }
+
+    return {
+      inserted: totalInserted,
+      updated: totalUpdated,
+      errors: totalErrors,
+    };
   }
 
   // ── Get Notice Detail ───────────────────────────────────
@@ -276,7 +359,11 @@ class TedProvider {
             buyerCountry: data.buyerCountry,
             noticeType: data.noticeType,
           },
-          create: { ...data, description: data.description ?? "", cpvCodes: data.cpvCodes ?? undefined },
+          create: {
+            ...data,
+            description: data.description ?? "",
+            cpvCodes: data.cpvCodes ?? undefined,
+          },
         });
 
         if (existingSet.has(raw.noticeId)) {
@@ -308,7 +395,11 @@ class TedProvider {
       const durationMs = Date.now() - startedAt.getTime();
       await prisma.dataSyncLog.update({
         where: { id: log.id },
-        data: { status: "COMPLETED", recordCount, completedAt: new Date() },
+        data: {
+          status: "COMPLETED",
+          recordCount,
+          completedAt: new Date(),
+        },
       });
       return { status: "COMPLETED", recordCount, durationMs };
     } catch (error) {
@@ -317,9 +408,18 @@ class TedProvider {
         error instanceof Error ? error.message : String(error);
       await prisma.dataSyncLog.update({
         where: { id: log.id },
-        data: { status: "FAILED", errorMessage, completedAt: new Date() },
+        data: {
+          status: "FAILED",
+          errorMessage,
+          completedAt: new Date(),
+        },
       });
-      return { status: "FAILED", recordCount: 0, durationMs, error: errorMessage };
+      return {
+        status: "FAILED",
+        recordCount: 0,
+        durationMs,
+        error: errorMessage,
+      };
     }
   }
 
@@ -328,10 +428,17 @@ class TedProvider {
   async healthCheck(): Promise<{ ok: boolean; latencyMs: number }> {
     const start = Date.now();
     try {
-      const res = await fetch(
-        `${TED_BASE_URL}/v3/notices/search?q=*&limit=1`,
-        { headers: TED_HEADERS, signal: AbortSignal.timeout(5000) },
-      );
+      const res = await fetch(`${TED_BASE_URL}/v3/notices/search`, {
+        method: "POST",
+        headers: TED_HEADERS,
+        body: JSON.stringify({
+          query: "publication-date >= 20260101",
+          fields: ["publication-number"],
+          limit: 1,
+          paginationMode: "PAGE_NUMBER",
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
       return { ok: res.ok, latencyMs: Date.now() - start };
     } catch {
       return { ok: false, latencyMs: Date.now() - start };
@@ -340,19 +447,39 @@ class TedProvider {
 
   // ── Private: Query Builder ──────────────────────────────
 
-  private buildQueryParts(params: TedSearchParams): string[] {
+  private buildQuery(params: TedSearchParams): string {
+    // If raw query provided, use it directly
+    if (params.query) return params.query;
+
     const parts: string[] = [];
 
-    if (params.query) parts.push(params.query);
-    // eForms v3 query syntax uses field IDs with operators
-    if (params.dateFrom) {
-      parts.push(`publication-date >= ${params.dateFrom.replace(/-/g, "")}`);
-    }
-    if (params.dateTo) {
-      parts.push(`publication-date <= ${params.dateTo.replace(/-/g, "")}`);
+    if (params.cpvCodes && params.cpvCodes.length > 0) {
+      const cpvPart = params.cpvCodes
+        .map((c) => `classification-cpv = ${c}`)
+        .join(" OR ");
+      parts.push(params.cpvCodes.length > 1 ? `(${cpvPart})` : cpvPart);
     }
 
-    return parts;
+    if (params.country) {
+      parts.push(`buyer-country = ${params.country}`);
+    }
+
+    if (params.dateFrom) {
+      parts.push(
+        `publication-date >= ${params.dateFrom.replace(/-/g, "")}`,
+      );
+    }
+    if (params.dateTo) {
+      parts.push(
+        `publication-date <= ${params.dateTo.replace(/-/g, "")}`,
+      );
+    }
+
+    if (params.noticeType) {
+      parts.push(`notice-type = ${params.noticeType}`);
+    }
+
+    return parts.length > 0 ? parts.join(" AND ") : "publication-date >= 20260101";
   }
 
   // ── Private: DB Record Mapper ───────────────────────────

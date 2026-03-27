@@ -16,7 +16,9 @@ import {
   BarChart3,
 } from "lucide-react";
 import TenderCard from "@/components/TenderCard";
-import { tenders, categories, stats } from "@/lib/data";
+import { categories } from "@/lib/data";
+import { prisma } from "@/lib/prisma";
+import { mapApiTender } from "@/lib/api-client";
 
 const iconMap: Record<string, React.ElementType> = {
   Building2,
@@ -29,8 +31,41 @@ const iconMap: Record<string, React.ElementType> = {
   Truck,
 };
 
-export default function Home() {
-  const activeTenders = tenders.filter((t) => t.status === "active").slice(0, 6);
+export default async function Home() {
+  const dbTenders = await prisma.tender.findMany({
+    where: { status: "BASVURU_ACIK" },
+    orderBy: { publishDate: "desc" },
+    take: 6,
+    select: {
+      id: true, title: true, institution: true, city: true,
+      tenderType: true, status: true, ekapNo: true, estimatedCost: true,
+      publishDate: true, deadline: true, description: true,
+      latitude: true, longitude: true,
+    },
+  });
+
+  const activeTenders = dbTenders.map((t) =>
+    mapApiTender({
+      ...t,
+      estimatedCost: t.estimatedCost?.toString() ?? null,
+      publishDate: t.publishDate.toISOString(),
+      deadline: t.deadline.toISOString(),
+      latitude: t.latitude ? Number(t.latitude) : null,
+      longitude: t.longitude ? Number(t.longitude) : null,
+    }),
+  );
+
+  const [tenderCount, companyCount] = await Promise.all([
+    prisma.tender.count({ where: { status: "BASVURU_ACIK" } }),
+    prisma.company.count(),
+  ]);
+
+  const stats = [
+    { label: "Aktif İhale", value: tenderCount.toLocaleString("tr-TR") + "+" },
+    { label: "Kayıtlı Firma", value: companyCount.toLocaleString("tr-TR") + "+" },
+    { label: "Kurum", value: "3.500+" },
+    { label: "Şehir", value: "81" },
+  ];
 
   return (
     <>

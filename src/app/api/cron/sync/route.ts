@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { ekapProvider } from "@/lib/providers/ekap-provider";
+import { resmiGazeteProvider } from "@/lib/providers/resmi-gazete-provider";
+import { kapProvider } from "@/lib/providers/kap-provider";
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,6 +80,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // ── Resmi Gazete + KAP sync (parallel, non-blocking) ──
+    const [gazetteResult, kapResult] = await Promise.allSettled([
+      resmiGazeteProvider.syncDailyGazette().catch(() => 0),
+      kapProvider.syncFromKap().catch(() => ({ synced: 0, errors: 0, duration: 0 })),
+    ]);
+
+    const gazetteCount = gazetteResult.status === "fulfilled" ? gazetteResult.value : 0;
+    const kapSynced = kapResult.status === "fulfilled" ? kapResult.value : { synced: 0, errors: 0, duration: 0 };
+
     // Yeni ihaleler için bildirim kurallarını kontrol et
     const rules = await prisma.notificationRule.findMany({
       where: { isActive: true },
@@ -109,6 +120,8 @@ export async function POST(request: NextRequest) {
         newRecords,
         updatedRecords: updated,
         notificationsCreated,
+        resmiGazete: gazetteCount,
+        kapSync: kapSynced,
       },
     });
   } catch (error) {

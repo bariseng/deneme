@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -8,16 +8,10 @@ import PWAProvider from "@/components/PWAProvider";
 import BottomNav from "@/components/BottomNav";
 import Providers from "@/components/Providers";
 
-const inter = localFont({
-  src: [
-    {
-      path: "../fonts/inter-var.woff2",
-      style: "normal",
-    },
-  ],
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
   variable: "--font-inter",
   display: "swap",
-  fallback: ["system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
 });
 
 export const metadata: Metadata = {

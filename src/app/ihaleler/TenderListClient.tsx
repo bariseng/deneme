@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
@@ -12,14 +12,16 @@ import {
   Calendar,
   ChevronsUpDown,
   Hash,
+  Loader2,
 } from "lucide-react";
 import TenderCard from "@/components/TenderCard";
+import type { Tender } from "@/lib/data";
 import {
-  tenders,
   categories,
   cities,
   institutionTypes,
 } from "@/lib/data";
+import { fetchTenders, type ApiPagination } from "@/lib/api-client";
 import { useDebounce } from "@/lib/hooks";
 import { formatCurrency } from "@/lib/format";
 
@@ -73,6 +75,17 @@ export default function TenderListClient() {
     Number(searchParams.get("sayfa")) || 1
   );
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // API state
+  const [tenders, setTenders] = useState<Tender[]>([]);
+  const [pagination, setPagination] = useState<ApiPagination>({
+    total: 0,
+    page: 1,
+    limit: 20,
+    pages: 0,
+    hasNext: false,
+  });
+  const [loading, setLoading] = useState(true);
 
   // Debounce search input
   const debouncedSearch = useDebounce(searchInput, 300);
@@ -132,90 +145,36 @@ export default function TenderListClient() {
     updateURL({});
   }, [updateURL]);
 
-  // Filter & sort
-  const filteredTenders = useMemo(() => {
-    let result = [...tenders];
+  // Map sort option to API sort params
+  const sortMapping: Record<SortOption, { sort: string; order: "asc" | "desc" }> = {
+    newest: { sort: "publishDate", order: "desc" },
+    deadline: { sort: "deadline", order: "asc" },
+    "cost-high": { sort: "estimatedCost", order: "desc" },
+    "cost-low": { sort: "estimatedCost", order: "asc" },
+  };
 
-    // Full-text search (min 3 chars)
-    if (debouncedSearch && debouncedSearch.length >= 3) {
-      const q = debouncedSearch.toLowerCase();
-      result = result.filter(
-        (t) =>
-          t.title.toLowerCase().includes(q) ||
-          t.institution.toLowerCase().includes(q) ||
-          t.description.toLowerCase().includes(q) ||
-          t.ekapNo.toLowerCase().includes(q)
-      );
-    }
-
-    if (selectedCategory) {
-      result = result.filter((t) =>
-        t.category.toLowerCase().includes(selectedCategory.toLowerCase())
-      );
-    }
-    if (selectedCity) {
-      result = result.filter((t) => t.city === selectedCity);
-    }
-    if (selectedStatus) {
-      result = result.filter((t) => t.status === selectedStatus);
-    }
-    if (selectedInstitutionType) {
-      result = result.filter(
-        (t) => t.institutionType === selectedInstitutionType
-      );
-    }
-    if (ekapNo) {
-      result = result.filter((t) =>
-        t.ekapNo.toLowerCase().includes(ekapNo.toLowerCase())
-      );
-    }
-
-    // Budget range
-    if (budgetMin > BUDGET_MIN || budgetMax < BUDGET_MAX) {
-      result = result.filter(
-        (t) =>
-          t.estimatedCostValue >= budgetMin &&
-          t.estimatedCostValue <= budgetMax
-      );
-    }
-
-    // Date range (deadline)
-    if (dateFrom) {
-      const from = new Date(dateFrom);
-      result = result.filter((t) => new Date(t.deadline) >= from);
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      result = result.filter((t) => new Date(t.deadline) <= to);
-    }
-
-    // Sort
-    switch (sortBy) {
-      case "deadline":
-        result.sort(
-          (a, b) =>
-            new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
-        );
-        break;
-      case "cost-high":
-        result.sort(
-          (a, b) => b.estimatedCostValue - a.estimatedCostValue
-        );
-        break;
-      case "cost-low":
-        result.sort(
-          (a, b) => a.estimatedCostValue - b.estimatedCostValue
-        );
-        break;
-      default:
-        result.sort(
-          (a, b) =>
-            new Date(b.publishDate).getTime() -
-            new Date(a.publishDate).getTime()
-        );
-    }
-
-    return result;
+  // Fetch tenders from API when filters change
+  useEffect(() => {
+    setLoading(true);
+    const { sort, order } = sortMapping[sortBy] ?? sortMapping.newest;
+    fetchTenders({
+      q: debouncedSearch && debouncedSearch.length >= 3 ? debouncedSearch : undefined,
+      city: selectedCity || undefined,
+      type: selectedCategory || undefined,
+      status: selectedStatus || undefined,
+      budgetMin: budgetMin > BUDGET_MIN ? budgetMin : undefined,
+      budgetMax: budgetMax < BUDGET_MAX ? budgetMax : undefined,
+      sort,
+      order,
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+    })
+      .then(({ tenders: t, pagination: p }) => {
+        setTenders(t);
+        setPagination(p);
+      })
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     debouncedSearch,
     selectedCategory,
@@ -228,16 +187,10 @@ export default function TenderListClient() {
     dateFrom,
     dateTo,
     sortBy,
+    currentPage,
   ]);
 
-  const totalPages = Math.ceil(filteredTenders.length / ITEMS_PER_PAGE);
-  const safePage = Math.min(currentPage, totalPages || 1);
-  const paginatedTenders = filteredTenders.slice(
-    (safePage - 1) * ITEMS_PER_PAGE,
-    safePage * ITEMS_PER_PAGE
-  );
-
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters (not page) change
   useEffect(() => {
     setCurrentPage(1);
   }, [
@@ -253,6 +206,9 @@ export default function TenderListClient() {
     dateTo,
     sortBy,
   ]);
+
+  const totalPages = pagination.pages;
+  const safePage = Math.min(currentPage, totalPages || 1);
 
   const clearFilters = () => {
     setSearchInput("");
@@ -606,7 +562,7 @@ export default function TenderListClient() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
           <p className="text-sm text-foreground-light">
             <span className="font-semibold text-foreground">
-              {filteredTenders.length}
+              {pagination.total}
             </span>{" "}
             ihale bulundu
             {debouncedSearch && debouncedSearch.length >= 3 && (
@@ -693,9 +649,23 @@ export default function TenderListClient() {
         )}
 
         {/* Results */}
-        {paginatedTenders.length > 0 ? (
+        {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-8">
-            {paginatedTenders.map((tender) => (
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-xl border border-border p-5 animate-pulse"
+              >
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-3" />
+                <div className="h-3 bg-gray-200 rounded w-1/2 mb-2" />
+                <div className="h-3 bg-gray-200 rounded w-full mb-2" />
+                <div className="h-3 bg-gray-200 rounded w-2/3" />
+              </div>
+            ))}
+          </div>
+        ) : tenders.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-8">
+            {tenders.map((tender) => (
               <TenderCard key={tender.id} tender={tender} />
             ))}
           </div>
