@@ -1,7 +1,15 @@
-import { PrismaClient } from "../src/generated/prisma";
+import "dotenv/config";
+import dotenv from "dotenv";
+import { resolve } from "path";
+dotenv.config({ path: resolve(process.cwd(), ".env.local"), override: true });
+
+import { PrismaClient } from "../src/generated/prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcryptjs from "bcryptjs";
 
-const prisma = new PrismaClient();
+const url = process.env.DATABASE_URL || "";
+const adapter = new PrismaPg({ connectionString: url, max: 5 });
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   // ─── Smart Seed Strategy ────────────────────────────────
@@ -108,10 +116,6 @@ async function main() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tenders: any[] = [];
 
-  if (skipMockTenders) {
-    console.log("  Mock ihale oluşturma atlandı (gerçek veri mevcut)");
-  } else {
-  // ─── İhale Verileri ───
   const cities = ["İstanbul", "Ankara", "İzmir", "Bursa", "Antalya", "Gaziantep", "Konya", "Adana", "Kayseri", "Trabzon", "Eskişehir", "Samsun", "Diyarbakır", "Mersin", "Denizli"];
   const types: ("YAPIM" | "MAL_ALIMI" | "HIZMET" | "DANISMANLIK")[] = ["YAPIM", "MAL_ALIMI", "HIZMET", "DANISMANLIK"];
   const statuses: ("BASVURU_ACIK" | "DEGERLENDIRME" | "SONUCLANDI" | "YAKLASAN")[] = ["BASVURU_ACIK", "DEGERLENDIRME", "SONUCLANDI", "YAKLASAN"];
@@ -133,6 +137,11 @@ async function main() {
     "TEİAŞ Genel Müdürlüğü",
     "İller Bankası A.Ş.",
   ];
+
+  if (skipMockTenders) {
+    console.log("  Mock ihale oluşturma atlandı (gerçek veri mevcut)");
+  } else {
+  // ─── İhale Verileri ───
 
   const tenderTitles = [
     { t: "Ankara-Sivas YHT Hattı 2. Etap Yapım İşi", type: "YAPIM" as const },
@@ -273,6 +282,8 @@ async function main() {
   }
 
   } // end if (!skipMockTenders)
+
+  const now = new Date();
 
   // ─── İhale Sonuçları (10 ihale) ───
   const resultCompanies = [
@@ -475,8 +486,8 @@ async function main() {
         totalTenders: 800 + Math.floor(Math.random() * 200),
         newTenders: 15 + Math.floor(Math.random() * 30),
         closingTenders: 5 + Math.floor(Math.random() * 15),
-        totalBudget: BigInt(Math.round((500 + Math.random() * 500) * 1000000)),
-        avgBudget: BigInt(Math.round((5 + Math.random() * 10) * 1000000)),
+        totalBudget: Math.round((500 + Math.random() * 500) * 1000000),
+        avgBudget: Math.round((5 + Math.random() * 10) * 1000000),
         totalUsers: 5000 + i * 10,
         activeUsers: 800 + Math.floor(Math.random() * 400),
         totalSearches: 2000 + Math.floor(Math.random() * 1000),
@@ -498,8 +509,8 @@ async function main() {
         month: "2026-03",
         sector,
         tenderCount: 20 + Math.floor(Math.random() * 80),
-        totalBudget: BigInt(Math.round((100 + Math.random() * 900) * 1000000)),
-        avgBudget: BigInt(Math.round((2 + Math.random() * 15) * 1000000)),
+        totalBudget: Math.round((100 + Math.random() * 900) * 1000000),
+        avgBudget: Math.round((2 + Math.random() * 15) * 1000000),
       },
     });
   }
