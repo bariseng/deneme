@@ -8,6 +8,9 @@ interface SearchResult {
   itemLabel: string;
   sector: string;
   unit: string;
+  avgPrice?: number | string;
+  minPrice?: number | string;
+  maxPrice?: number | string;
 }
 
 interface PriceSearchAutocompleteProps {
@@ -113,15 +116,26 @@ export default function PriceSearchAutocomplete({
               <button
                 key={r.item}
                 onClick={() => handleSelect(r)}
-                className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors border-b last:border-b-0 flex items-center justify-between"
+                className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors border-b last:border-b-0"
               >
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{r.itemLabel}</p>
-                  <p className="text-xs text-gray-400">{r.unit}</p>
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900">{r.itemLabel}</p>
+                    <p className="text-xs text-gray-400">{r.unit} · {SECTOR_LABELS[r.sector] || r.sector}</p>
+                  </div>
+                  {r.avgPrice ? (
+                    <div className="text-right ml-3 shrink-0">
+                      <p className="text-sm font-semibold text-blue-700">
+                        {Number(r.avgPrice).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                      </p>
+                      <p className="text-[10px] text-gray-400">
+                        {Number(r.minPrice).toLocaleString("tr-TR", { maximumFractionDigits: 0 })} – {Number(r.maxPrice).toLocaleString("tr-TR", { maximumFractionDigits: 0 })} ₺
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400 ml-3">Fiyat yok</span>
+                  )}
                 </div>
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                  {SECTOR_LABELS[r.sector] || r.sector}
-                </span>
               </button>
             ))
           )}

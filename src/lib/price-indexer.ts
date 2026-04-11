@@ -156,11 +156,37 @@ export async function searchPriceItems(query: string, sector?: string) {
     where.itemLabel = { contains: query, mode: "insensitive" };
   }
 
+  // En son ay bilgisini bul
+  const latest = await prisma.unitPriceIndex.findFirst({
+    where: { ...where, city: null },
+    orderBy: { month: "desc" },
+    select: { month: true },
+  });
+
+  if (!latest) {
+    return prisma.unitPriceIndex.findMany({
+      where,
+      select: { item: true, itemLabel: true, sector: true, unit: true },
+      distinct: ["item"],
+      take: 20,
+    });
+  }
+
+  // En güncel fiyat bilgisiyle birlikte döndür
   const results = await prisma.unitPriceIndex.findMany({
-    where,
-    select: { item: true, itemLabel: true, sector: true, unit: true },
+    where: { ...where, month: latest.month, city: null },
+    select: {
+      item: true,
+      itemLabel: true,
+      sector: true,
+      unit: true,
+      avgPrice: true,
+      minPrice: true,
+      maxPrice: true,
+    },
     distinct: ["item"],
     take: 20,
+    orderBy: { itemLabel: "asc" },
   });
 
   return results;
